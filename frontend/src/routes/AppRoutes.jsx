@@ -22,6 +22,7 @@ export default function AppRoutes() {
       {/* Protected application routes */}
       <Route element={<ProtectedRoute />}>
         <Route path="/app" element={<AppShell />} />
+        <Route path="/app/c/:conversationId" element={<AppShell />} />
       </Route>
 
       {/* 404 Fallback */}

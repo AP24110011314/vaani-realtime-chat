@@ -14,3 +14,9 @@
 - Rate-limiting using Bucket4j: 5 requests/min per IP+email on login, 5 requests/hour per IP on registration.
 - Single-flight 401 refresh interceptor in Axios (`api/http.js`) to seamlessly buffer and replay concurrent requests during token rotation.
 
+
+## 4. Phase 3 Direct Conversations & SPA CSRF
+- **SPA CSRF Configuration**: Configured `CsrfTokenRequestAttributeHandler.setCsrfRequestAttributeName(null)` so that `CookieCsrfTokenRepository.withHttpOnlyFalse()` issues raw tokens in the `XSRF-TOKEN` cookie, perfectly matching the raw header `X-XSRF-TOKEN` sent by Axios and client API calls without XOR-masking mismatches.
+- **Direct Conversation Key & Concurrency**: Generated canonical `min_max` key via `DirectKey.of(u1, u2)` with unique database constraint. Concurrent creation safely catches `DataIntegrityViolationException` and re-queries the existing record.
+- **Message Cursor & Scroll Preservation**: Cursor pagination queries `id < :before ORDER BY id DESC` on the backend. The frontend maintains scroll height using `container.scrollHeight` diff in `useLayoutEffect` to prevent jumping when prepending older messages.
+- **REST Polling (Phase 3)**: Implemented 5-second refetch interval via TanStack Query for conversations and open message threads, ready to transition cleanly to WebSocket updates in Phase 4.

@@ -28,11 +28,11 @@ Backend: get-or-create idempotent (call twice, and concurrently); non-member can
 Frontend: composer behaviour, conversation sorting, empty states.
 
 ## Acceptance checklist
-- [ ] User A searches B, starts chat, sends text; B (other browser) sees it within 5 s after polling.
-- [ ] Starting a chat with the same person twice opens the same conversation.
-- [ ] Scrolling up loads older messages without jumping.
-- [ ] A third user cannot open the conversation by guessing the id.
-- [ ] Usable at 360 px width.
+- [x] User A searches B, starts chat, sends text; B (other browser) sees it within 5 s after polling.
+- [x] Starting a chat with the same person twice opens the same conversation.
+- [x] Scrolling up loads older messages without jumping.
+- [x] A third user cannot open the conversation by guessing the id.
+- [x] Usable at 360 px width.
 
 ## Commit
 ```bash

@@ -1,6 +1,9 @@
 package com.vanni;
 
 import com.vanni.entity.User;
+import com.vanni.repository.ConversationMemberRepository;
+import com.vanni.repository.ConversationRepository;
+import com.vanni.repository.MessageRepository;
 import com.vanni.repository.RefreshTokenRepository;
 import com.vanni.repository.UserRepository;
 import jakarta.servlet.http.Cookie;
@@ -35,10 +38,22 @@ class AuthIntegrationTest {
     private RefreshTokenRepository refreshTokenRepository;
 
     @Autowired
+    private MessageRepository messageRepository;
+
+    @Autowired
+    private ConversationMemberRepository conversationMemberRepository;
+
+    @Autowired
+    private ConversationRepository conversationRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @BeforeEach
     void setUp() {
+        messageRepository.deleteAll();
+        conversationMemberRepository.deleteAll();
+        conversationRepository.deleteAll();
         refreshTokenRepository.deleteAll();
         userRepository.deleteAll();
     }

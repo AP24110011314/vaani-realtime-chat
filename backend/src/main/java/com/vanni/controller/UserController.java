@@ -2,12 +2,15 @@ package com.vanni.controller;
 
 import com.vanni.dto.request.UpdateUserRequest;
 import com.vanni.dto.response.UserMeResponse;
+import com.vanni.dto.response.UserSummaryResponse;
 import com.vanni.security.CurrentUser;
 import com.vanni.security.UserPrincipal;
 import com.vanni.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/users")
@@ -30,5 +33,20 @@ public class UserController {
             @Valid @RequestBody UpdateUserRequest req
     ) {
         return ResponseEntity.ok(userService.updateMe(principal.id(), req));
+    }
+
+    @GetMapping
+    public ResponseEntity<List<UserSummaryResponse>> searchUsers(
+            @CurrentUser UserPrincipal principal,
+            @RequestParam(required = false, defaultValue = "") String query,
+            @RequestParam(required = false, defaultValue = "0") int page,
+            @RequestParam(required = false, defaultValue = "20") int size
+    ) {
+        return ResponseEntity.ok(userService.search(principal.id(), query, page, size));
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<UserSummaryResponse> getUser(@PathVariable Long id) {
+        return ResponseEntity.ok(userService.getUser(id));
     }
 }
