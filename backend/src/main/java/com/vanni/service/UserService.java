@@ -19,9 +19,11 @@ import java.util.List;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final PresenceService presenceService;
 
-    public UserService(UserRepository userRepository) {
+    public UserService(UserRepository userRepository, PresenceService presenceService) {
         this.userRepository = userRepository;
+        this.presenceService = presenceService;
     }
 
     @Transactional(readOnly = true)
@@ -75,13 +77,19 @@ public class UserService {
     }
 
     public UserSummaryResponse toUserSummary(User user) {
+        return toUserSummary(user, null);
+    }
+
+    public UserSummaryResponse toUserSummary(User user, com.vanni.entity.MemberRole role) {
+        boolean online = presenceService.isOnline(user.getId());
         return new UserSummaryResponse(
             user.getId(),
             user.getName(),
             user.getAvatarUrl(),
             user.getAbout(),
-            true, // Default active indicator for REST
-            user.isShowLastSeen() ? user.getLastSeenAt() : null
+            online,
+            user.isShowLastSeen() ? user.getLastSeenAt() : null,
+            role
         );
     }
 }

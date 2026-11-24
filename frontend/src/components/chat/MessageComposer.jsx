@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { SendHorizonal } from 'lucide-react'
 
-export default function MessageComposer({ onSendMessage, disabled }) {
+export default function MessageComposer({ onSendMessage, onKeyStroke, onStopTyping, disabled }) {
   const [content, setContent] = useState('')
   const textareaRef = useRef(null)
 
@@ -16,11 +16,17 @@ export default function MessageComposer({ onSendMessage, disabled }) {
   const handleSend = () => {
     const trimmed = content.trim()
     if (!trimmed || disabled) return
+    onStopTyping?.()
     onSendMessage(trimmed)
     setContent('')
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
+  }
+
+  const handleChange = (e) => {
+    setContent(e.target.value)
+    onKeyStroke?.()
   }
 
   const handleKeyDown = (e) => {
@@ -36,7 +42,7 @@ export default function MessageComposer({ onSendMessage, disabled }) {
         <textarea
           ref={textareaRef}
           value={content}
-          onChange={(e) => setContent(e.target.value)}
+          onChange={handleChange}
           onKeyDown={handleKeyDown}
           placeholder="Type a message... (Press Enter to send, Shift+Enter for newline)"
           rows={1}

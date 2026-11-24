@@ -24,11 +24,11 @@
 Permission matrix (member vs admin vs outsider for each group action); last-admin-leaves rule; removed user cannot send/read; typing throttle; presence multi-tab (online until last tab closes); privacy flag hides presence.
 
 ## Acceptance checklist
-- [ ] Create a 3-person group; all see messages live with sender names.
-- [ ] Non-admin cannot add/remove/rename (UI hidden and API 403).
-- [ ] Removed member is kicked out instantly and cannot fetch history.
-- [ ] Typing indicator shows and disappears correctly.
-- [ ] Closing the last tab flips the user to offline with last seen.
+- [x] Create a 3-person group; all see messages live with sender names.
+- [x] Non-admin cannot add/remove/rename (UI hidden and API 403).
+- [x] Removed member is kicked out instantly and cannot fetch history.
+- [x] Typing indicator shows and disappears correctly.
+- [x] Closing the last tab flips the user to offline with last seen.
 
 ## Commit
 ```bash

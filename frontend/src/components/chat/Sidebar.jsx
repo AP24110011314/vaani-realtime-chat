@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react'
-import { Search, SquarePen, LogOut, X } from 'lucide-react'
+import { Search, SquarePen, Users, LogOut, X } from 'lucide-react'
 import ConversationList from './ConversationList'
 import UserSearchModal from './UserSearchModal'
+import GroupCreateModal from './GroupCreateModal'
 import { useAuth } from '../../hooks/useAuth'
 
 export default function Sidebar({
@@ -14,6 +15,7 @@ export default function Sidebar({
   const { user, logout } = useAuth()
   const [filterText, setFilterText] = useState('')
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false)
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false)
 
   const filteredConversations = useMemo(() => {
     if (!filterText.trim()) return conversations
@@ -54,6 +56,14 @@ export default function Sidebar({
         </div>
 
         <div className="flex items-center gap-1">
+          <button
+            onClick={() => setIsGroupModalOpen(true)}
+            className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"
+            title="New Group"
+            aria-label="New Group"
+          >
+            <Users className="w-4 h-4" />
+          </button>
           <button
             onClick={() => setIsSearchModalOpen(true)}
             className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"
@@ -110,6 +120,15 @@ export default function Sidebar({
         isOpen={isSearchModalOpen}
         onClose={() => setIsSearchModalOpen(false)}
         onSelectUser={onStartDirectChat}
+      />
+
+      {/* New Group Modal */}
+      <GroupCreateModal
+        isOpen={isGroupModalOpen}
+        onClose={() => setIsGroupModalOpen(false)}
+        onCreated={(newGroup) => {
+          onSelectConversation?.(newGroup.id)
+        }}
       />
     </aside>
   )

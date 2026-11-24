@@ -1,13 +1,31 @@
 import { formatTime } from '../../lib/formatters'
 import { Clock, AlertCircle } from 'lucide-react'
 
-export default function MessageBubble({ message, isMine, onRetry }) {
+export default function MessageBubble({ message, isMine, isGroup, onRetry }) {
   const isPending = message.pending
   const isFailed = message.failed
   const isDeleted = message.deleted
+  const isSystem = message.messageType === 'SYSTEM' || message.type === 'SYSTEM'
+
+  if (isSystem) {
+    return (
+      <div className="flex justify-center my-2 select-text">
+        <span className="text-[11px] font-medium bg-slate-800/80 text-slate-400 px-3 py-1 rounded-full border border-slate-700/50 shadow-xs">
+          {message.content}
+        </span>
+      </div>
+    )
+  }
 
   return (
     <div className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} mb-1.5 group`}>
+      {/* Sender name for group chats */}
+      {isGroup && !isMine && message.sender?.name && (
+        <span className="text-[11px] font-semibold text-indigo-400 mb-0.5 ml-1">
+          {message.sender.name}
+        </span>
+      )}
+
       <div
         className={`max-w-[85%] sm:max-w-[70%] px-3.5 py-2 rounded-2xl break-words text-sm shadow-sm transition-all ${
           isMine

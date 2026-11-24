@@ -12,6 +12,9 @@ import ConversationList from './components/chat/ConversationList'
 import ChatWindow from './components/chat/ChatWindow'
 import ConnectionBanner from './components/common/ConnectionBanner'
 import MessageBubble from './components/chat/MessageBubble'
+import GroupCreateModal from './components/chat/GroupCreateModal'
+import GroupInfoPanel from './components/chat/GroupInfoPanel'
+import ChatHeader from './components/chat/ChatHeader'
 import * as useSocketModule from './hooks/useSocket'
 
 function createTestQueryClient() {
@@ -437,5 +440,127 @@ describe('Realtime Query Cache Updates', () => {
     expect(convs[0].id).toBe(1) // Chat 1 jumped to top!
     expect(convs[0].lastMessage.content).toBe('New message in Chat 1!')
     expect(convs[0].unreadCount).toBe(1)
+  })
+})
+
+describe('Phase 5 Groups, Presence & System Messages', () => {
+  it('renders system message as centered announcement pill', () => {
+    const sysMsg = {
+      id: 50,
+      conversationId: 10,
+      content: 'Asha created group "Design Team"',
+      messageType: 'SYSTEM',
+      createdAt: new Date().toISOString(),
+      sender: { id: 1, name: 'Asha' },
+    }
+
+    render(<MessageBubble message={sysMsg} isMine={false} onRetry={vi.fn()} />)
+    expect(screen.getByText('Asha created group "Design Team"')).toBeInTheDocument()
+  })
+
+  it('renders group sender name for other members in group chat', () => {
+    const groupMsg = {
+      id: 51,
+      conversationId: 10,
+      content: 'Hello team!',
+      messageType: 'TEXT',
+      createdAt: new Date().toISOString(),
+      sender: { id: 2, name: 'Ravi' },
+    }
+
+    render(<MessageBubble message={groupMsg} isMine={false} isGroup={true} onRetry={vi.fn()} />)
+    expect(screen.getByText('Ravi')).toBeInTheDocument()
+    expect(screen.getByText('Hello team!')).toBeInTheDocument()
+  })
+
+  it('renders typing indicator in ChatHeader when active', () => {
+    const conv = {
+      id: 10,
+      type: 'GROUP',
+      title: 'Design Team',
+      members: [{ id: 1, name: 'Alice' }, { id: 2, name: 'Ravi' }],
+    }
+
+    render(
+      <ChatHeader
+        conversation={conv}
+        currentUserId={1}
+        onBack={vi.fn()}
+        onToggleInfo={vi.fn()}
+        typingText="Ravi is typing..."
+      />
+    )
+
+    expect(screen.getByText('Ravi is typing...')).toBeInTheDocument()
+  })
+
+  it('renders group info panel with admin-only controls', () => {
+    const queryClient = createTestQueryClient()
+    const conv = {
+      id: 20,
+      type: 'GROUP',
+      title: 'Mobile Dev',
+      description: 'Building mobile features',
+      myRole: 'ADMIN',
+      members: [
+        { id: 1, name: 'Alice', role: 'ADMIN' },
+        { id: 2, name: 'Bob', role: 'MEMBER' },
+      ],
+    }
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <GroupInfoPanel
+          conversation={conv}
+          currentUserId={1}
+          onClose={vi.fn()}
+          onLeft={vi.fn()}
+        />
+      </QueryClientProvider>
+    )
+
+    expect(screen.getByText('Mobile Dev')).toBeInTheDocument()
+    expect(screen.getByText('Building mobile features')).toBeInTheDocument()
+    expect(screen.getByText(/Add Members/i)).toBeInTheDocument()
+    expect(screen.getByTitle('Remove member')).toBeInTheDocument()
+    expect(screen.getByTitle('Make Admin')).toBeInTheDocument()
+  })
+
+  it('hides admin controls from non-admin in GroupInfoPanel', () => {
+    const queryClient = createTestQueryClient()
+    const conv = {
+      id: 20,
+      type: 'GROUP',
+      title: 'Mobile Dev',
+      description: 'Building mobile features',
+      myRole: 'MEMBER',
+      members: [
+        { id: 1, name: 'Alice', role: 'ADMIN' },
+        { id: 2, name: 'Bob', role: 'MEMBER' },
+      ],
+    }
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <GroupInfoPanel
+          conversation={conv}
+          currentUserId={2}
+          onClose={vi.fn()}
+          onLeft={vi.fn()}
+        />
+      </QueryClientProvider>
+    )
+
+    expect(screen.queryByText(/Add Members/i)).not.toBeInTheDocument()
+    expect(screen.queryByTitle('Remove member')).not.toBeInTheDocument()
+    expect(screen.getByText(/Leave Group/i)).toBeInTheDocument()
+  })
+
+  it('renders GroupCreateModal and validates minimum members requirement', () => {
+    render(<GroupCreateModal isOpen={true} onClose={vi.fn()} onCreated={vi.fn()} />)
+    expect(screen.getByText('Create New Group')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('e.g. Design Team, Book Club')).toBeInTheDocument()
+    const createBtn = screen.getByRole('button', { name: /create group/i })
+    expect(createBtn).toBeDisabled()
   })
 })

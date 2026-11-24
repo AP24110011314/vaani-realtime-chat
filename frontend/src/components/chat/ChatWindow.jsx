@@ -3,24 +3,42 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { conversationApi } from '../../api/conversationApi'
 import { messageApi } from '../../api/messageApi'
 import { useSocket } from '../../hooks/useSocket'
+import { useTyping } from '../../hooks/useTyping'
 import ChatHeader from './ChatHeader'
 import MessageList from './MessageList'
 import MessageComposer from './MessageComposer'
+import GroupInfoPanel from './GroupInfoPanel'
 import { MessageSquare, ShieldAlert } from 'lucide-react'
 
 export default function ChatWindow({ conversationId, onBack, currentUserId }) {
   const queryClient = useQueryClient()
-  const { isConnected, sendMessage, setActiveConversationId } = useSocket()
+  const { isConnected, sendMessage, setActiveConversationId, removedEvent } = useSocket()
+  const { typingText, handleKeyStroke, handleStopTyping } = useTyping(conversationId)
   const [olderMessages, setOlderMessages] = useState([])
   const [hasOlder, setHasOlder] = useState(true)
   const [isLoadingOlder, setIsLoadingOlder] = useState(false)
+  const [showGroupInfo, setShowGroupInfo] = useState(false)
+  const [prevConversationId, setPrevConversationId] = useState(conversationId)
   const pendingTimersRef = useRef(new Map())
+
+  // Reset group info panel if active conversation changes
+  if (conversationId !== prevConversationId) {
+    setPrevConversationId(conversationId)
+    setShowGroupInfo(false)
+  }
 
   // Register active conversation with socket for events & catch-up
   useEffect(() => {
     setActiveConversationId(conversationId || null)
     return () => setActiveConversationId(null)
   }, [conversationId, setActiveConversationId])
+
+  // Handle immediate removal from active conversation
+  useEffect(() => {
+    if (removedEvent?.conversationId === String(conversationId)) {
+      onBack?.()
+    }
+  }, [removedEvent, conversationId, onBack])
 
   // Clear timers on unmount
   useEffect(() => {
@@ -231,24 +249,43 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-950 overflow-hidden">
-      <ChatHeader
-        conversation={conversation}
-        onBack={onBack}
-        currentUserId={currentUserId}
-      />
-      <MessageList
-        messages={mergedMessages}
-        currentUserId={currentUserId}
-        onLoadOlder={loadOlderMessages}
-        hasOlder={hasOlder}
-        isLoadingOlder={isLoadingOlder}
-        onRetryMessage={handleRetryMessage}
-      />
-      <MessageComposer
-        onSendMessage={handleSendMessage}
-        disabled={isLoadingConv || Boolean(convError)}
-      />
+    <div className="flex-1 flex h-full bg-slate-950 overflow-hidden">
+      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
+        <ChatHeader
+          conversation={conversation}
+          onBack={onBack}
+          currentUserId={currentUserId}
+          onToggleInfo={() => setShowGroupInfo((prev) => !prev)}
+          typingText={typingText}
+        />
+        <MessageList
+          messages={mergedMessages}
+          currentUserId={currentUserId}
+          isGroup={conversation?.type === 'GROUP'}
+          onLoadOlder={loadOlderMessages}
+          hasOlder={hasOlder}
+          isLoadingOlder={isLoadingOlder}
+          onRetryMessage={handleRetryMessage}
+        />
+        <MessageComposer
+          onSendMessage={handleSendMessage}
+          onKeyStroke={handleKeyStroke}
+          onStopTyping={handleStopTyping}
+          disabled={isLoadingConv || Boolean(convError)}
+        />
+      </div>
+
+      {showGroupInfo && conversation?.type === 'GROUP' && (
+        <GroupInfoPanel
+          conversation={conversation}
+          currentUserId={currentUserId}
+          onClose={() => setShowGroupInfo(false)}
+          onLeft={() => {
+            setShowGroupInfo(false)
+            onBack?.()
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react'
 export default function MessageList({
   messages = [],
   currentUserId,
+  isGroup = false,
   onLoadOlder,
   hasOlder,
   isLoadingOlder,
@@ -102,6 +103,7 @@ export default function MessageList({
             <MessageBubble
               message={message}
               isMine={isMine}
+              isGroup={isGroup}
               onRetry={onRetryMessage}
             />
           </div>

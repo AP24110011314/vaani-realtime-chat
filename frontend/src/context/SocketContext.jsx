@@ -4,11 +4,17 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../hooks/useAuth'
 import { createSocket } from '../lib/socket'
 import { messageApi } from '../api/messageApi'
+import { presenceApi } from '../api/presenceApi'
 
 const defaultSocketContextValue = {
   status: 'disconnected',
   isConnected: false,
   sendMessage: () => false,
+  sendTyping: () => false,
+  fetchPresence: () => {},
+  presenceMap: {},
+  typingMap: {},
+  removedEvent: null,
   activeConversationId: null,
   setActiveConversationId: () => {},
 }
@@ -20,6 +26,9 @@ export function SocketProvider({ children }) {
   const queryClient = useQueryClient()
   const [status, setStatus] = useState('disconnected') // 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'offline'
   const [activeConversationId, setActiveConversationId] = useState(null)
+  const [presenceMap, setPresenceMap] = useState({})
+  const [typingMap, setTypingMap] = useState({})
+  const [removedEvent, setRemovedEvent] = useState(null)
 
   const clientRef = useRef(null)
   const activeConversationRef = useRef(activeConversationId)
@@ -132,10 +141,60 @@ export function SocketProvider({ children }) {
         }
 
         case 'conversation.removed': {
+          const convIdStr = String(data.conversationId)
+          setRemovedEvent({ conversationId: convIdStr, ts: Date.now() })
           queryClient.setQueryData(['conversations'], (oldConvs = []) => {
             if (!Array.isArray(oldConvs)) return oldConvs
-            return oldConvs.filter((c) => c.id !== data.conversationId)
+            return oldConvs.filter((c) => String(c.id) !== convIdStr)
           })
+          break
+        }
+
+        case 'presence.changed': {
+          if (data?.userId) {
+            setPresenceMap((prev) => ({
+              ...prev,
+              [data.userId]: {
+                online: Boolean(data.online),
+                lastSeenAt: data.lastSeenAt,
+              },
+            }))
+          }
+          break
+        }
+
+        case 'typing': {
+          if (data?.conversationId && data?.userId) {
+            const convId = String(data.conversationId)
+            const userId = data.userId
+            const userName = data.name
+
+            setTypingMap((prev) => {
+              const currentConv = { ...(prev[convId] || {}) }
+              if (currentConv[userId]?.timerId) {
+                clearTimeout(currentConv[userId].timerId)
+              }
+
+              if (data.typing) {
+                const timerId = setTimeout(() => {
+                  setTypingMap((state) => {
+                    const c = { ...(state[convId] || {}) }
+                    delete c[userId]
+                    return { ...state, [convId]: c }
+                  })
+                }, 4000)
+
+                currentConv[userId] = {
+                  name: userName,
+                  timerId,
+                }
+              } else {
+                delete currentConv[userId]
+              }
+
+              return { ...prev, [convId]: currentConv }
+            })
+          }
           break
         }
 
@@ -291,10 +350,58 @@ export function SocketProvider({ children }) {
     }
   }, [])
 
+  // Publish /app/chat.typing frame over STOMP
+  const sendTyping = useCallback((conversationId, typing) => {
+    const client = clientRef.current
+    if (!client || !client.connected || !conversationId) {
+      return false
+    }
+
+    try {
+      client.publish({
+        destination: '/app/chat.typing',
+        body: JSON.stringify({
+          conversationId: Number(conversationId),
+          typing: Boolean(typing),
+        }),
+      })
+      return true
+    } catch {
+      return false
+    }
+  }, [])
+
+  // Fetch presence snapshot for a set of user IDs
+  const fetchPresence = useCallback(async (userIds) => {
+    if (!userIds || userIds.length === 0) return
+    try {
+      const list = await presenceApi.get(userIds)
+      if (Array.isArray(list)) {
+        setPresenceMap((prev) => {
+          const next = { ...prev }
+          for (const item of list) {
+            next[item.userId] = {
+              online: item.online,
+              lastSeenAt: item.lastSeenAt,
+            }
+          }
+          return next
+        })
+      }
+    } catch (e) {
+      console.warn('Failed to fetch initial presence snapshot:', e)
+    }
+  }, [])
+
   const value = {
     status,
     isConnected: status === 'connected',
     sendMessage,
+    sendTyping,
+    fetchPresence,
+    presenceMap,
+    typingMap,
+    removedEvent,
     activeConversationId,
     setActiveConversationId,
   }

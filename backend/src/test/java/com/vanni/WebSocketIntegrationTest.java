@@ -344,4 +344,58 @@ class WebSocketIntegrationTest {
 
         aliceSession.disconnect();
     }
+
+    @Test
+    void typingIndicator_forwardedAndThrottled() throws Exception {
+        WebSocketStompClient aliceClient = createClient();
+        WebSocketHttpHeaders aliceHeaders = new WebSocketHttpHeaders();
+        aliceHeaders.add("Origin", "http://localhost:5173");
+        aliceHeaders.add("Cookie", "vanni_at=" + aliceToken);
+        StompSession aliceSession = aliceClient.connectAsync(getWsUrl(), aliceHeaders, new StompSessionHandlerAdapter() {}).get(5, TimeUnit.SECONDS);
+
+        WebSocketStompClient bobClient = createClient();
+        WebSocketHttpHeaders bobHeaders = new WebSocketHttpHeaders();
+        bobHeaders.add("Origin", "http://localhost:5173");
+        bobHeaders.add("Cookie", "vanni_at=" + bobToken);
+        StompSession bobSession = bobClient.connectAsync(getWsUrl(), bobHeaders, new StompSessionHandlerAdapter() {}).get(5, TimeUnit.SECONDS);
+
+        BlockingQueue<String> bobEvents = new LinkedBlockingQueue<>();
+        bobSession.subscribe("/user/queue/events", new StompFrameHandler() {
+            @Override
+            public Type getPayloadType(StompHeaders headers) {
+                return String.class;
+            }
+
+            @Override
+            public void handleFrame(StompHeaders headers, Object payload) {
+                bobEvents.offer((String) payload);
+            }
+        });
+
+        TimeUnit.MILLISECONDS.sleep(200);
+
+        String typingJson = String.format("""
+            {
+                "conversationId": %d,
+                "typing": true
+            }
+            """, conv.id());
+
+        // Alice sends typing true
+        aliceSession.send("/app/chat.typing", typingJson);
+
+        String event1 = bobEvents.poll(5, TimeUnit.SECONDS);
+        assertThat(event1).isNotNull();
+        assertThat(event1).contains("\"type\":\"typing\"");
+        assertThat(event1).contains("\"name\":\"Alice\"");
+        assertThat(event1).contains("\"typing\":true");
+
+        // Alice immediately sends typing true again (< 2s) -> should be throttled
+        aliceSession.send("/app/chat.typing", typingJson);
+        String event2 = bobEvents.poll(500, TimeUnit.MILLISECONDS);
+        assertThat(event2).isNull(); // Throttled!
+
+        aliceSession.disconnect();
+        bobSession.disconnect();
+    }
 }

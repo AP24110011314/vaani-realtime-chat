@@ -1,6 +1,10 @@
 package com.vanni.controller;
 
+import com.vanni.dto.request.AddMembersRequest;
 import com.vanni.dto.request.CreateDirectConversationRequest;
+import com.vanni.dto.request.CreateGroupRequest;
+import com.vanni.dto.request.SetRoleRequest;
+import com.vanni.dto.request.UpdateGroupRequest;
 import com.vanni.dto.response.ConversationDto;
 import com.vanni.security.CurrentUser;
 import com.vanni.security.UserPrincipal;
@@ -45,5 +49,64 @@ public class ConversationController {
     ) {
         ConversationDto dto = conversationService.getOrCreateDirect(principal.id(), req.userId());
         return ResponseEntity.status(HttpStatus.CREATED).body(dto);
+    }
+
+    @PostMapping("/groups")
+    public ResponseEntity<ConversationDto> createGroup(
+            @CurrentUser UserPrincipal principal,
+            @Valid @RequestBody CreateGroupRequest req
+    ) {
+        ConversationDto dto = conversationService.createGroup(principal.id(), req);
+        return ResponseEntity.status(HttpStatus.CREATED).body(dto);
+    }
+
+    @PatchMapping("/{id}")
+    public ResponseEntity<ConversationDto> updateGroup(
+            @CurrentUser UserPrincipal principal,
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateGroupRequest req
+    ) {
+        ConversationDto dto = conversationService.updateGroup(id, principal.id(), req);
+        return ResponseEntity.ok(dto);
+    }
+
+    @PostMapping("/{id}/members")
+    public ResponseEntity<ConversationDto> addMembers(
+            @CurrentUser UserPrincipal principal,
+            @PathVariable Long id,
+            @Valid @RequestBody AddMembersRequest req
+    ) {
+        ConversationDto dto = conversationService.addMembers(id, principal.id(), req);
+        return ResponseEntity.ok(dto);
+    }
+
+    @DeleteMapping("/{id}/members/{userId}")
+    public ResponseEntity<Void> removeMember(
+            @CurrentUser UserPrincipal principal,
+            @PathVariable Long id,
+            @PathVariable Long userId
+    ) {
+        conversationService.removeMember(id, principal.id(), userId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/leave")
+    public ResponseEntity<Void> leaveGroup(
+            @CurrentUser UserPrincipal principal,
+            @PathVariable Long id
+    ) {
+        conversationService.leave(id, principal.id());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/members/{userId}/role")
+    public ResponseEntity<ConversationDto> setRole(
+            @CurrentUser UserPrincipal principal,
+            @PathVariable Long id,
+            @PathVariable Long userId,
+            @Valid @RequestBody SetRoleRequest req
+    ) {
+        ConversationDto dto = conversationService.setRole(id, principal.id(), userId, req.role());
+        return ResponseEntity.ok(dto);
     }
 }

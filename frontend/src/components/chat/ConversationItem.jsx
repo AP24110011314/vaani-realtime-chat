@@ -1,20 +1,27 @@
 import { formatConversationDate } from '../../lib/formatters'
-import { User } from 'lucide-react'
+import { User, Users } from 'lucide-react'
+import { usePresence } from '../../hooks/usePresence'
 
 export default function ConversationItem({ conversation, isActive, onClick, currentUserId }) {
-  const { title, avatarUrl, lastMessage, unreadCount, members } = conversation
+  const { type, title, avatarUrl, lastMessage, unreadCount, members } = conversation
+  const isGroup = type === 'GROUP'
 
   // Resolve peer if direct chat
-  const peer = members?.find((m) => m.id !== currentUserId) || members?.[0]
-  const isOnline = peer?.online
+  const peer = !isGroup ? members?.find((m) => m.id !== currentUserId) || members?.[0] : null
+  const peerPresence = usePresence(peer?.id)
+  const isOnline = !isGroup && (peerPresence?.online ?? peer?.online)
 
   // Format snippet
   let snippet = 'No messages yet'
   if (lastMessage) {
     if (lastMessage.deleted) {
       snippet = 'This message was deleted'
+    } else if (lastMessage.messageType === 'SYSTEM' || lastMessage.type === 'SYSTEM') {
+      snippet = lastMessage.content || ''
     } else if (lastMessage.sender?.id === currentUserId) {
       snippet = `You: ${lastMessage.content || ''}`
+    } else if (isGroup && lastMessage.sender?.name) {
+      snippet = `${lastMessage.sender.name}: ${lastMessage.content || ''}`
     } else {
       snippet = lastMessage.content || ''
     }
@@ -43,7 +50,13 @@ export default function ConversationItem({ conversation, isActive, onClick, curr
           />
         ) : (
           <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-sm font-bold text-white shadow-inner">
-            {title ? title.charAt(0).toUpperCase() : <User className="w-5 h-5" />}
+            {isGroup ? (
+              <Users className="w-5 h-5 text-indigo-100" />
+            ) : title ? (
+              title.charAt(0).toUpperCase()
+            ) : (
+              <User className="w-5 h-5" />
+            )}
           </div>
         )}
         {isOnline && (
