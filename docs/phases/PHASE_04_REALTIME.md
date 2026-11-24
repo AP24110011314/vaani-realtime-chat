@@ -26,11 +26,11 @@ Backend (WebSocket): unauthenticated handshake rejected; bad origin rejected; su
 Frontend: cache update on events, pending-to-sent replacement.
 
 ## Acceptance checklist
-- [ ] Two browsers chat with no refresh and no polling.
-- [ ] Stop backend -> banner shows; restart -> reconnects automatically and missed messages appear exactly once.
-- [ ] Sending while offline from browser A shows failed/retry; retry works.
-- [ ] Multiple tabs of the same user stay in sync.
-- [ ] Messages are in MySQL even when the recipient is offline.
+- [x] Two browsers chat with no refresh and no polling.
+- [x] Stop backend -> banner shows; restart -> reconnects automatically and missed messages appear exactly once.
+- [x] Sending while offline from browser A shows failed/retry; retry works.
+- [x] Multiple tabs of the same user stay in sync.
+- [x] Messages are in MySQL even when the recipient is offline.
 
 ## Commit
 ```bash

@@ -29,18 +29,21 @@ public class MessageService {
     private final ConversationMemberRepository conversationMemberRepository;
     private final ConversationAccessService conversationAccessService;
     private final UserService userService;
+    private final EventPublisher eventPublisher;
 
     public MessageService(
             MessageRepository messageRepository,
             ConversationRepository conversationRepository,
             ConversationMemberRepository conversationMemberRepository,
             ConversationAccessService conversationAccessService,
-            UserService userService) {
+            UserService userService,
+            EventPublisher eventPublisher) {
         this.messageRepository = messageRepository;
         this.conversationRepository = conversationRepository;
         this.conversationMemberRepository = conversationMemberRepository;
         this.conversationAccessService = conversationAccessService;
         this.userService = userService;
+        this.eventPublisher = eventPublisher;
     }
 
     public MessageDto send(Long conversationId, Long senderId, SendMessageRequest req) {
@@ -65,7 +68,9 @@ public class MessageService {
         if (req.clientMessageId() != null && !req.clientMessageId().isBlank()) {
             Optional<Message> existing = messageRepository.findBySenderIdAndClientMessageId(senderId, req.clientMessageId().trim());
             if (existing.isPresent()) {
-                return toDto(existing.get());
+                MessageDto dto = toDto(existing.get());
+                eventPublisher.sendToUser(senderId, "message.created", dto);
+                return dto;
             }
         }
 
@@ -96,7 +101,10 @@ public class MessageService {
         member.setLastReadAt(message.getCreatedAt());
         conversationMemberRepository.save(member);
 
-        return toDto(message);
+        MessageDto dto = toDto(message);
+        eventPublisher.sendToConversationMembers(conversationId, "message.created", dto);
+
+        return dto;
     }
 
     @Transactional(readOnly = true)

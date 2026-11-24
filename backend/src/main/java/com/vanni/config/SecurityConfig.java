@@ -51,6 +51,7 @@ public class SecurityConfig {
         http
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .csrf(csrf -> csrf
+                .ignoringRequestMatchers("/ws/**")
                 .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                 .csrfTokenRequestHandler(requestHandler)
             )
@@ -63,7 +64,7 @@ public class SecurityConfig {
                 .authenticationEntryPoint(unauthorizedEntryPoint())
             )
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**", "/actuator/health", "/error").permitAll()
+                .requestMatchers("/api/auth/**", "/actuator/health", "/error", "/ws/**").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)

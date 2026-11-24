@@ -1,7 +1,8 @@
-import { useState, useCallback, useMemo } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { conversationApi } from '../../api/conversationApi'
 import { messageApi } from '../../api/messageApi'
+import { useSocket } from '../../hooks/useSocket'
 import ChatHeader from './ChatHeader'
 import MessageList from './MessageList'
 import MessageComposer from './MessageComposer'
@@ -9,11 +10,28 @@ import { MessageSquare, ShieldAlert } from 'lucide-react'
 
 export default function ChatWindow({ conversationId, onBack, currentUserId }) {
   const queryClient = useQueryClient()
+  const { isConnected, sendMessage, setActiveConversationId } = useSocket()
   const [olderMessages, setOlderMessages] = useState([])
   const [hasOlder, setHasOlder] = useState(true)
   const [isLoadingOlder, setIsLoadingOlder] = useState(false)
+  const pendingTimersRef = useRef(new Map())
 
-  // Fetch conversation details with 5s polling
+  // Register active conversation with socket for events & catch-up
+  useEffect(() => {
+    setActiveConversationId(conversationId || null)
+    return () => setActiveConversationId(null)
+  }, [conversationId, setActiveConversationId])
+
+  // Clear timers on unmount
+  useEffect(() => {
+    const timers = pendingTimersRef.current
+    return () => {
+      timers.forEach((timer) => clearTimeout(timer))
+      timers.clear()
+    }
+  }, [])
+
+  // Fetch conversation details (no polling - updated via realtime events)
   const {
     data: conversation,
     isLoading: isLoadingConv,
@@ -22,15 +40,13 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
     queryKey: ['conversation', conversationId],
     queryFn: () => conversationApi.get(conversationId),
     enabled: Boolean(conversationId),
-    refetchInterval: 5000,
   })
 
-  // Fetch newest messages with 5s polling
+  // Fetch newest messages (no polling - updated via realtime events)
   const { data: latestMessages = [] } = useQuery({
     queryKey: ['messages', conversationId],
     queryFn: () => messageApi.list(conversationId, { size: 30 }),
     enabled: Boolean(conversationId),
-    refetchInterval: 5000,
   })
 
   // Combined messages: olderMessages + latestMessages sorted ascending by id / createdAt
@@ -75,63 +91,107 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
     }
   }, [conversationId, isLoadingOlder, hasOlder, mergedMessages])
 
-  // Send message mutation with optimistic update
-  const sendMutation = useMutation({
-    mutationFn: async ({ content, clientMessageId }) => {
-      return messageApi.send(conversationId, {
-        content,
-        clientMessageId,
-      })
-    },
-    onMutate: async ({ content, clientMessageId }) => {
-      await queryClient.cancelQueries({ queryKey: ['messages', conversationId] })
+  // Core send message logic supporting STOMP and REST fallback with 10s retry timeout
+  const executeSend = useCallback(
+    async (content, clientMessageId) => {
+      if (!conversationId || !content.trim()) return
 
-      const optimisticMsg = {
-        id: null,
-        conversationId: Number(conversationId),
-        content,
-        clientMessageId,
-        sender: { id: currentUserId },
-        isMine: true,
-        pending: true,
-        createdAt: new Date().toISOString(),
+      // Cancel any existing timer for this clientMessageId
+      if (pendingTimersRef.current.has(clientMessageId)) {
+        clearTimeout(pendingTimersRef.current.get(clientMessageId))
+        pendingTimersRef.current.delete(clientMessageId)
       }
 
-      queryClient.setQueryData(['messages', conversationId], (old = []) => [
-        optimisticMsg,
-        ...old,
-      ])
-
-      return { optimisticMsg }
-    },
-    onSuccess: (savedMsg, { clientMessageId }) => {
-      queryClient.setQueryData(['messages', conversationId], (old = []) =>
-        old.map((m) => (m.clientMessageId === clientMessageId ? savedMsg : m))
-      )
-      // Also invalidate conversations to update snippet & order
-      queryClient.invalidateQueries({ queryKey: ['conversations'] })
-    },
-    onError: (_err, { clientMessageId }) => {
-      queryClient.setQueryData(['messages', conversationId], (old = []) =>
-        old.map((m) =>
-          m.clientMessageId === clientMessageId
-            ? { ...m, pending: false, failed: true }
-            : m
+      // Optimistic update
+      queryClient.setQueryData(['messages', conversationId], (old = []) => {
+        const existingIdx = old.findIndex(
+          (m) => m.clientMessageId === clientMessageId
         )
-      )
+        if (existingIdx >= 0) {
+          return old.map((m, idx) =>
+            idx === existingIdx ? { ...m, pending: true, failed: false } : m
+          )
+        }
+        const optimisticMsg = {
+          id: null,
+          conversationId: Number(conversationId),
+          content,
+          clientMessageId,
+          sender: { id: currentUserId },
+          isMine: true,
+          pending: true,
+          failed: false,
+          createdAt: new Date().toISOString(),
+        }
+        return [...old, optimisticMsg]
+      })
+
+      // Set 10-second client timeout to mark message as failed if no ack
+      const timeoutId = setTimeout(() => {
+        queryClient.setQueryData(['messages', conversationId], (old = []) =>
+          old.map((m) =>
+            m.clientMessageId === clientMessageId && m.pending
+              ? { ...m, pending: false, failed: true }
+              : m
+          )
+        )
+        pendingTimersRef.current.delete(clientMessageId)
+      }, 10000)
+
+      pendingTimersRef.current.set(clientMessageId, timeoutId)
+
+      // Try sending via WebSocket first if connected
+      if (isConnected) {
+        const published = sendMessage({
+          conversationId: Number(conversationId),
+          content,
+          clientMessageId,
+        })
+        if (published) {
+          return
+        }
+      }
+
+      // Fall back to REST if disconnected or publish failed
+      try {
+        const saved = await messageApi.send(conversationId, {
+          content,
+          clientMessageId,
+        })
+        clearTimeout(timeoutId)
+        pendingTimersRef.current.delete(clientMessageId)
+
+        queryClient.setQueryData(['messages', conversationId], (old = []) =>
+          old.map((m) =>
+            m.clientMessageId === clientMessageId
+              ? { ...saved, pending: false, failed: false }
+              : m
+          )
+        )
+        queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      } catch {
+        clearTimeout(timeoutId)
+        pendingTimersRef.current.delete(clientMessageId)
+
+        queryClient.setQueryData(['messages', conversationId], (old = []) =>
+          old.map((m) =>
+            m.clientMessageId === clientMessageId
+              ? { ...m, pending: false, failed: true }
+              : m
+          )
+        )
+      }
     },
-  })
+    [conversationId, currentUserId, isConnected, queryClient, sendMessage]
+  )
 
   const handleSendMessage = (content) => {
     const clientMessageId = crypto.randomUUID()
-    sendMutation.mutate({ content, clientMessageId })
+    executeSend(content, clientMessageId)
   }
 
   const handleRetryMessage = (message) => {
-    sendMutation.mutate({
-      content: message.content,
-      clientMessageId: message.clientMessageId,
-    })
+    executeSend(message.content, message.clientMessageId)
   }
 
   if (!conversationId) {

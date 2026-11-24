@@ -33,6 +33,7 @@ public class ConversationService {
     private final ConversationAccessService conversationAccessService;
     private final UserService userService;
     private final MessageService messageService;
+    private final EventPublisher eventPublisher;
 
     public ConversationService(
             ConversationRepository conversationRepository,
@@ -41,7 +42,8 @@ public class ConversationService {
             MessageRepository messageRepository,
             ConversationAccessService conversationAccessService,
             UserService userService,
-            MessageService messageService) {
+            MessageService messageService,
+            EventPublisher eventPublisher) {
         this.conversationRepository = conversationRepository;
         this.conversationMemberRepository = conversationMemberRepository;
         this.userRepository = userRepository;
@@ -49,6 +51,7 @@ public class ConversationService {
         this.conversationAccessService = conversationAccessService;
         this.userService = userService;
         this.messageService = messageService;
+        this.eventPublisher = eventPublisher;
     }
 
     public ConversationDto getOrCreateDirect(Long currentUserId, Long targetUserId) {
@@ -80,7 +83,11 @@ public class ConversationService {
             conversationMemberRepository.save(cm1);
             conversationMemberRepository.save(cm2);
 
-            return toDto(conv, currentUserId);
+            ConversationDto dto = toDto(conv, currentUserId);
+            ConversationDto targetDto = toDto(conv, targetUserId);
+            eventPublisher.sendToUser(targetUserId, "conversation.created", targetDto);
+
+            return dto;
         } catch (DataIntegrityViolationException ex) {
             Conversation conv = conversationRepository.findByDirectKey(directKey)
                 .orElseThrow(() -> ex);
