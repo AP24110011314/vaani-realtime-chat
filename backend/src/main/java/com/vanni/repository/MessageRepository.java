@@ -26,6 +26,37 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
     @Query("SELECT m FROM Message m WHERE m.conversation.id = :convId AND m.id > :after ORDER BY m.id ASC")
     List<Message> findAfter(@Param("convId") Long convId, @Param("after") Long after, Pageable pageable);
 
+    Optional<Message> findTopByConversationIdOrderByIdDesc(Long conversationId);
+
+    @Query("""
+        SELECT m FROM Message m
+        WHERE m.conversation.id = :convId
+          AND m.id <= :upToId
+          AND m.sender.id != :senderId
+          AND m.deletedAt IS NULL
+        ORDER BY m.id ASC
+    """)
+    List<Message> findUpToMessage(
+        @Param("convId") Long convId,
+        @Param("upToId") Long upToId,
+        @Param("senderId") Long senderId
+    );
+
+    @Query("""
+        SELECT m FROM Message m
+        WHERE m.conversation.id = :convId
+          AND m.sender.id != :userId
+          AND m.deletedAt IS NULL
+          AND NOT EXISTS (
+              SELECT 1 FROM MessageReceipt r
+              WHERE r.message.id = m.id AND r.user.id = :userId
+          )
+    """)
+    List<Message> findMessagesWithoutReceiptFromUser(
+        @Param("convId") Long convId,
+        @Param("userId") Long userId
+    );
+
     @Query("""
         SELECT COUNT(m) FROM Message m
         WHERE m.conversation.id = :convId

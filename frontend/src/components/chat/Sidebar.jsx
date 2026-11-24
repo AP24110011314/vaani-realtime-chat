@@ -14,14 +14,23 @@ export default function Sidebar({
 }) {
   const { user, logout } = useAuth()
   const [filterText, setFilterText] = useState('')
+  const [filterTab, setFilterTab] = useState('all') // 'all' | 'unread'
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false)
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false)
 
+  const totalUnread = useMemo(() => {
+    return conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0)
+  }, [conversations])
+
   const filteredConversations = useMemo(() => {
-    if (!filterText.trim()) return conversations
+    let list = conversations
+    if (filterTab === 'unread') {
+      list = list.filter((c) => (c.unreadCount || 0) > 0)
+    }
+    if (!filterText.trim()) return list
     const q = filterText.toLowerCase()
-    return conversations.filter((c) => c.title?.toLowerCase().includes(q))
-  }, [conversations, filterText])
+    return list.filter((c) => c.title?.toLowerCase().includes(q))
+  }, [conversations, filterText, filterTab])
 
   return (
     <aside className="w-full h-full flex flex-col bg-slate-900 border-r border-slate-800 select-none">
@@ -103,6 +112,41 @@ export default function Sidebar({
             </button>
           )}
         </div>
+      </div>
+
+      {/* Filter Tabs: All vs Unread */}
+      <div className="flex items-center gap-1.5 px-3 py-2 border-b border-slate-800/60 bg-slate-900/60">
+        <button
+          type="button"
+          onClick={() => setFilterTab('all')}
+          className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+            filterTab === 'all'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800'
+          }`}
+        >
+          All
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilterTab('unread')}
+          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+            filterTab === 'unread'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800'
+          }`}
+        >
+          <span>Unread</span>
+          {totalUnread > 0 && (
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                filterTab === 'unread' ? 'bg-indigo-700 text-white' : 'bg-indigo-600/40 text-indigo-300'
+              }`}
+            >
+              {totalUnread}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Conversations List */}

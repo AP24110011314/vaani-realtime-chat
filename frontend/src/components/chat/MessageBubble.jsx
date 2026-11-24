@@ -1,11 +1,14 @@
 import { formatTime } from '../../lib/formatters'
-import { Clock, AlertCircle } from 'lucide-react'
+import { Clock, AlertCircle, Check, CheckCheck } from 'lucide-react'
 
-export default function MessageBubble({ message, isMine, isGroup, onRetry }) {
+export default function MessageBubble({ message, isMine, isGroup, onRetry, onShowReceipts }) {
   const isPending = message.pending
   const isFailed = message.failed
   const isDeleted = message.deleted
   const isSystem = message.messageType === 'SYSTEM' || message.type === 'SYSTEM'
+  const status = message.status || 'SENT'
+  const isRead = status === 'READ'
+  const isDelivered = status === 'DELIVERED'
 
   if (isSystem) {
     return (
@@ -80,6 +83,26 @@ export default function MessageBubble({ message, isMine, isGroup, onRetry }) {
             >
               <AlertCircle className="w-3 h-3" />
               <span>Retry</span>
+            </button>
+          )}
+          {isMine && !isPending && !isFailed && (
+            <button
+              type="button"
+              onClick={() => isGroup && onShowReceipts?.(message)}
+              className={`inline-flex items-center ${isGroup ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
+              title={
+                isGroup
+                  ? `Status: ${status}. Click for details.`
+                  : `Status: ${status}`
+              }
+            >
+              {isRead ? (
+                <CheckCheck className="w-3.5 h-3.5 text-sky-300" aria-label="Read" />
+              ) : isDelivered ? (
+                <CheckCheck className="w-3.5 h-3.5 text-indigo-200/80" aria-label="Delivered" />
+              ) : (
+                <Check className="w-3.5 h-3.5 text-indigo-200/80" aria-label="Sent" />
+              )}
             </button>
           )}
         </div>

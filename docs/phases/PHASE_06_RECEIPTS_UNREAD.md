@@ -25,10 +25,10 @@
 Receipt never downgrades; unread count after read and after new messages; group aggregation; privacy flag; reconnect delivers pending.
 
 ## Acceptance checklist
-- [ ] Ticks progress sent -> delivered -> read in real time.
-- [ ] Unread badges correct across refresh and multiple tabs; clear when the chat is opened and visible.
-- [ ] Not marked read while the tab is in the background.
-- [ ] Reader with receipts disabled does not trigger blue ticks.
+- [x] Ticks progress sent -> delivered -> read in real time.
+- [x] Unread badges correct across refresh and multiple tabs; clear when the chat is opened and visible.
+- [x] Not marked read while the tab is in the background.
+- [x] Reader with receipts disabled does not trigger blue ticks.
 
 ## Commit
 ```bash

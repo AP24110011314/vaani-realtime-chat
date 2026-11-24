@@ -8,16 +8,18 @@ import ChatHeader from './ChatHeader'
 import MessageList from './MessageList'
 import MessageComposer from './MessageComposer'
 import GroupInfoPanel from './GroupInfoPanel'
+import MessageReceiptModal from './MessageReceiptModal'
 import { MessageSquare, ShieldAlert } from 'lucide-react'
 
 export default function ChatWindow({ conversationId, onBack, currentUserId }) {
   const queryClient = useQueryClient()
-  const { isConnected, sendMessage, setActiveConversationId, removedEvent } = useSocket()
+  const { isConnected, sendMessage, setActiveConversationId, removedEvent, sendRead } = useSocket()
   const { typingText, handleKeyStroke, handleStopTyping } = useTyping(conversationId)
   const [olderMessages, setOlderMessages] = useState([])
   const [hasOlder, setHasOlder] = useState(true)
   const [isLoadingOlder, setIsLoadingOlder] = useState(false)
   const [showGroupInfo, setShowGroupInfo] = useState(false)
+  const [receiptModalMessage, setReceiptModalMessage] = useState(null)
   const [prevConversationId, setPrevConversationId] = useState(conversationId)
   const pendingTimersRef = useRef(new Map())
 
@@ -30,8 +32,11 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
   // Register active conversation with socket for events & catch-up
   useEffect(() => {
     setActiveConversationId(conversationId || null)
+    if (conversationId && typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      sendRead?.(conversationId)
+    }
     return () => setActiveConversationId(null)
-  }, [conversationId, setActiveConversationId])
+  }, [conversationId, setActiveConversationId, sendRead])
 
   // Handle immediate removal from active conversation
   useEffect(() => {
@@ -262,10 +267,17 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
           messages={mergedMessages}
           currentUserId={currentUserId}
           isGroup={conversation?.type === 'GROUP'}
+          unreadCount={conversation?.unreadCount || 0}
           onLoadOlder={loadOlderMessages}
           hasOlder={hasOlder}
           isLoadingOlder={isLoadingOlder}
           onRetryMessage={handleRetryMessage}
+          onShowReceipts={setReceiptModalMessage}
+          onNearBottom={() => {
+            if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+              sendRead?.(conversationId)
+            }
+          }}
         />
         <MessageComposer
           onSendMessage={handleSendMessage}
@@ -284,6 +296,14 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
             setShowGroupInfo(false)
             onBack?.()
           }}
+        />
+      )}
+
+      {receiptModalMessage && (
+        <MessageReceiptModal
+          isOpen={Boolean(receiptModalMessage)}
+          onClose={() => setReceiptModalMessage(null)}
+          message={receiptModalMessage}
         />
       )}
     </div>

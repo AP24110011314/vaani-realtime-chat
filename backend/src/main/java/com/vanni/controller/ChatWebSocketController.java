@@ -11,6 +11,7 @@ import com.vanni.repository.UserRepository;
 import com.vanni.service.ConversationAccessService;
 import com.vanni.service.EventPublisher;
 import com.vanni.service.MessageService;
+import com.vanni.service.ReceiptService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -36,6 +37,7 @@ public class ChatWebSocketController {
     private final ConversationAccessService conversationAccessService;
     private final ConversationMemberRepository conversationMemberRepository;
     private final UserRepository userRepository;
+    private final ReceiptService receiptService;
     private final ObjectMapper objectMapper;
 
     private final ConcurrentHashMap<String, Long> typingThrottles = new ConcurrentHashMap<>();
@@ -45,12 +47,14 @@ public class ChatWebSocketController {
             EventPublisher eventPublisher,
             ConversationAccessService conversationAccessService,
             ConversationMemberRepository conversationMemberRepository,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            ReceiptService receiptService) {
         this.messageService = messageService;
         this.eventPublisher = eventPublisher;
         this.conversationAccessService = conversationAccessService;
         this.conversationMemberRepository = conversationMemberRepository;
         this.userRepository = userRepository;
+        this.receiptService = receiptService;
         this.objectMapper = new JsonMapper();
     }
 
@@ -151,6 +155,63 @@ public class ChatWebSocketController {
             }
         } catch (Exception ex) {
             log.debug("Error handling typing frame from user {}: {}", senderId, ex.getMessage());
+        }
+    }
+
+    @MessageMapping("chat.delivered")
+    public void handleDelivered(@Payload Object payloadObj, Principal principal) {
+        Long userId = Long.parseLong(principal.getName());
+        try {
+            String json;
+            if (payloadObj instanceof byte[] bytes) {
+                json = new String(bytes, StandardCharsets.UTF_8);
+            } else {
+                json = payloadObj.toString();
+            }
+
+            JsonNode node = objectMapper.readTree(json);
+            Long conversationId = node.has("conversationId") ? node.get("conversationId").asLong() : null;
+            if (conversationId == null) return;
+
+            List<Long> messageIds = null;
+            if (node.has("messageIds") && node.get("messageIds").isArray()) {
+                messageIds = new java.util.ArrayList<>();
+                for (JsonNode idNode : node.get("messageIds")) {
+                    messageIds.add(idNode.asLong());
+                }
+            }
+            Long upToMessageId = (node.has("upToMessageId") && !node.get("upToMessageId").isNull())
+                ? node.get("upToMessageId").asLong()
+                : null;
+
+            receiptService.markDelivered(userId, conversationId, messageIds, upToMessageId);
+        } catch (Exception ex) {
+            log.debug("Error handling chat.delivered from user {}: {}", userId, ex.getMessage());
+        }
+    }
+
+    @MessageMapping("chat.read")
+    public void handleRead(@Payload Object payloadObj, Principal principal) {
+        Long userId = Long.parseLong(principal.getName());
+        try {
+            String json;
+            if (payloadObj instanceof byte[] bytes) {
+                json = new String(bytes, StandardCharsets.UTF_8);
+            } else {
+                json = payloadObj.toString();
+            }
+
+            JsonNode node = objectMapper.readTree(json);
+            Long conversationId = node.has("conversationId") ? node.get("conversationId").asLong() : null;
+            if (conversationId == null) return;
+
+            Long upToMessageId = (node.has("upToMessageId") && !node.get("upToMessageId").isNull())
+                ? node.get("upToMessageId").asLong()
+                : null;
+
+            receiptService.markRead(userId, conversationId, upToMessageId);
+        } catch (Exception ex) {
+            log.debug("Error handling chat.read from user {}: {}", userId, ex.getMessage());
         }
     }
 }

@@ -6,10 +6,12 @@ import com.vanni.dto.response.ReplySnippet;
 import com.vanni.entity.Conversation;
 import com.vanni.entity.ConversationMember;
 import com.vanni.entity.Message;
+import com.vanni.entity.MessageReceipt;
 import com.vanni.entity.MessageType;
 import com.vanni.exception.ApiException;
 import com.vanni.repository.ConversationMemberRepository;
 import com.vanni.repository.ConversationRepository;
+import com.vanni.repository.MessageReceiptRepository;
 import com.vanni.repository.MessageRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -18,7 +20,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -30,6 +34,8 @@ public class MessageService {
     private final ConversationAccessService conversationAccessService;
     private final UserService userService;
     private final EventPublisher eventPublisher;
+    private final ReceiptService receiptService;
+    private final MessageReceiptRepository messageReceiptRepository;
 
     public MessageService(
             MessageRepository messageRepository,
@@ -37,13 +43,17 @@ public class MessageService {
             ConversationMemberRepository conversationMemberRepository,
             ConversationAccessService conversationAccessService,
             UserService userService,
-            EventPublisher eventPublisher) {
+            EventPublisher eventPublisher,
+            ReceiptService receiptService,
+            MessageReceiptRepository messageReceiptRepository) {
         this.messageRepository = messageRepository;
         this.conversationRepository = conversationRepository;
         this.conversationMemberRepository = conversationMemberRepository;
         this.conversationAccessService = conversationAccessService;
         this.userService = userService;
         this.eventPublisher = eventPublisher;
+        this.receiptService = receiptService;
+        this.messageReceiptRepository = messageReceiptRepository;
     }
 
     public MessageDto send(Long conversationId, Long senderId, SendMessageRequest req) {
@@ -123,10 +133,28 @@ public class MessageService {
             messages = messageRepository.findLatest(conversationId, pageable);
         }
 
-        return messages.stream().map(this::toDto).toList();
+        if (messages.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> messageIds = messages.stream().map(Message::getId).toList();
+        Map<Long, List<MessageReceipt>> receiptsByMsgId = messageReceiptRepository.findByMessageIds(messageIds).stream()
+            .collect(Collectors.groupingBy(r -> r.getMessage().getId()));
+        List<ConversationMember> activeMembers = conversationMemberRepository.findByConversationIdAndLeftAtIsNull(conversationId);
+
+        return messages.stream()
+            .map(m -> toDtoWithStatus(m, receiptService.computeMessageStatus(m, activeMembers, receiptsByMsgId)))
+            .toList();
     }
 
     public MessageDto toDto(Message message) {
+        List<ConversationMember> activeMembers = conversationMemberRepository.findByConversationIdAndLeftAtIsNull(message.getConversation().getId());
+        List<MessageReceipt> receipts = messageReceiptRepository.findByMessageId(message.getId());
+        String status = receiptService.computeMessageStatus(message, activeMembers, Map.of(message.getId(), receipts));
+        return toDtoWithStatus(message, status);
+    }
+
+    public MessageDto toDtoWithStatus(Message message, String status) {
         ReplySnippet replySnippet = null;
         if (message.getReplyTo() != null) {
             Message r = message.getReplyTo();
@@ -147,7 +175,7 @@ public class MessageService {
             replySnippet,
             List.of(),
             List.of(),
-            "SENT",
+            status != null ? status : "SENT",
             message.getCreatedAt(),
             message.getEditedAt(),
             message.getDeletedAt() != null

@@ -12,9 +12,13 @@ import ConversationList from './components/chat/ConversationList'
 import ChatWindow from './components/chat/ChatWindow'
 import ConnectionBanner from './components/common/ConnectionBanner'
 import MessageBubble from './components/chat/MessageBubble'
+import MessageList from './components/chat/MessageList'
 import GroupCreateModal from './components/chat/GroupCreateModal'
 import GroupInfoPanel from './components/chat/GroupInfoPanel'
 import ChatHeader from './components/chat/ChatHeader'
+import MessageReceiptModal from './components/chat/MessageReceiptModal'
+import ToastNotification from './components/common/ToastNotification'
+import Sidebar from './components/chat/Sidebar'
 import * as useSocketModule from './hooks/useSocket'
 
 function createTestQueryClient() {
@@ -562,5 +566,107 @@ describe('Phase 5 Groups, Presence & System Messages', () => {
     expect(screen.getByPlaceholderText('e.g. Design Team, Book Club')).toBeInTheDocument()
     const createBtn = screen.getByRole('button', { name: /create group/i })
     expect(createBtn).toBeDisabled()
+  })
+
+  describe('Phase 6 Receipts, Unread Counts & Notifications', () => {
+    it('renders read/delivered/sent ticks correctly in MessageBubble', () => {
+      const sentMsg = { id: 1, content: 'Sent msg', status: 'SENT', createdAt: '2026-11-24T10:00:00Z' }
+      const deliveredMsg = { id: 2, content: 'Delivered msg', status: 'DELIVERED', createdAt: '2026-11-24T10:01:00Z' }
+      const readMsg = { id: 3, content: 'Read msg', status: 'READ', createdAt: '2026-11-24T10:02:00Z' }
+
+      const { rerender } = render(<MessageBubble message={sentMsg} isMine={true} />)
+      expect(screen.getByLabelText('Sent')).toBeInTheDocument()
+
+      rerender(<MessageBubble message={deliveredMsg} isMine={true} />)
+      expect(screen.getByLabelText('Delivered')).toBeInTheDocument()
+
+      rerender(<MessageBubble message={readMsg} isMine={true} />)
+      expect(screen.getByLabelText('Read')).toBeInTheDocument()
+    })
+
+    it('renders unread divider in MessageList when unreadCount > 0', () => {
+      const messages = [
+        { id: 10, content: 'Old message', sender: { id: 1 }, createdAt: '2026-11-24T10:00:00Z' },
+        { id: 11, content: 'Unread 1', sender: { id: 2 }, createdAt: '2026-11-24T10:05:00Z' },
+        { id: 12, content: 'Unread 2', sender: { id: 2 }, createdAt: '2026-11-24T10:06:00Z' },
+      ]
+
+      render(
+        <MessageList
+          messages={messages}
+          currentUserId={1}
+          unreadCount={2}
+          onLoadOlder={vi.fn()}
+          hasOlder={false}
+          isLoadingOlder={false}
+        />
+      )
+
+      expect(screen.getByText('2 unread messages')).toBeInTheDocument()
+    })
+
+    it('filters unread conversations when Unread tab is clicked in Sidebar', () => {
+      const queryClient = createTestQueryClient()
+      const mockUser = { id: 1, name: 'Alice', email: 'alice@vanni.app' }
+      const convs = [
+        { id: 101, title: 'Chat With Bob', unreadCount: 0, members: [] },
+        { id: 102, title: 'Team Chat', unreadCount: 3, members: [] },
+      ]
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <AuthContext.Provider value={{ user: mockUser, logout: vi.fn() }}>
+            <Sidebar
+              conversations={convs}
+              activeId={null}
+              onSelectConversation={vi.fn()}
+              onStartDirectChat={vi.fn()}
+            />
+          </AuthContext.Provider>
+        </QueryClientProvider>
+      )
+
+      expect(screen.getByText('Chat With Bob')).toBeInTheDocument()
+      expect(screen.getByText('Team Chat')).toBeInTheDocument()
+
+      // Click Unread tab
+      fireEvent.click(screen.getByRole('button', { name: /unread/i }))
+      expect(screen.queryByText('Chat With Bob')).not.toBeInTheDocument()
+      expect(screen.getByText('Team Chat')).toBeInTheDocument()
+    })
+
+    it('renders ToastNotification for incoming messages with dismiss action', () => {
+      const onSelect = vi.fn()
+      const onDismiss = vi.fn()
+      const toast = {
+        id: 99,
+        conversationId: 42,
+        senderName: 'Charlie',
+        content: 'Check out the new design',
+      }
+
+      render(<ToastNotification toast={toast} onSelect={onSelect} onDismiss={onDismiss} />)
+
+      expect(screen.getByText('Charlie')).toBeInTheDocument()
+      expect(screen.getByText('Check out the new design')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByText('Charlie'))
+      expect(onSelect).toHaveBeenCalledWith(42)
+    })
+
+    it('renders MessageReceiptModal with message info header', () => {
+      const queryClient = createTestQueryClient()
+      const msg = { id: 88, content: 'Important update', createdAt: '2026-11-24T12:00:00Z' }
+
+      render(
+        <QueryClientProvider client={queryClient}>
+          <MessageReceiptModal isOpen={true} onClose={vi.fn()} message={msg} />
+        </QueryClientProvider>
+      )
+
+      expect(screen.getByText('Message Info')).toBeInTheDocument()
+      expect(screen.getByText(/"Important update"/i)).toBeInTheDocument()
+      expect(screen.getByText(/Recipients/i)).toBeInTheDocument()
+    })
   })
 })

@@ -17,9 +17,11 @@ public class PresenceEventListener {
     private static final Logger log = LoggerFactory.getLogger(PresenceEventListener.class);
 
     private final PresenceService presenceService;
+    private final com.vanni.service.ReceiptService receiptService;
 
-    public PresenceEventListener(PresenceService presenceService) {
+    public PresenceEventListener(PresenceService presenceService, com.vanni.service.ReceiptService receiptService) {
         this.presenceService = presenceService;
+        this.receiptService = receiptService;
     }
 
     @EventListener
@@ -32,6 +34,7 @@ public class PresenceEventListener {
             String sessionId = SimpMessageHeaderAccessor.getSessionId(event.getMessage().getHeaders());
             log.debug("Session connected event: user={}, session={}", userId, sessionId);
             presenceService.onSessionConnected(sessionId, userId);
+            receiptService.markPendingDeliveredForUser(userId);
         } catch (NumberFormatException e) {
             log.warn("Non-numeric principal name on SessionConnectedEvent: {}", principal.getName());
         }

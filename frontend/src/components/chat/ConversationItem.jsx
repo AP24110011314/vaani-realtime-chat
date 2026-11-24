@@ -1,5 +1,5 @@
 import { formatConversationDate } from '../../lib/formatters'
-import { User, Users } from 'lucide-react'
+import { User, Users, Check, CheckCheck } from 'lucide-react'
 import { usePresence } from '../../hooks/usePresence'
 
 export default function ConversationItem({ conversation, isActive, onClick, currentUserId }) {
@@ -11,6 +11,10 @@ export default function ConversationItem({ conversation, isActive, onClick, curr
   const peerPresence = usePresence(peer?.id)
   const isOnline = !isGroup && (peerPresence?.online ?? peer?.online)
 
+  // Last message sender check
+  const isLastMsgMine = lastMessage?.sender?.id === currentUserId
+  const lastMsgStatus = lastMessage?.status
+
   // Format snippet
   let snippet = 'No messages yet'
   if (lastMessage) {
@@ -18,7 +22,7 @@ export default function ConversationItem({ conversation, isActive, onClick, curr
       snippet = 'This message was deleted'
     } else if (lastMessage.messageType === 'SYSTEM' || lastMessage.type === 'SYSTEM') {
       snippet = lastMessage.content || ''
-    } else if (lastMessage.sender?.id === currentUserId) {
+    } else if (isLastMsgMine) {
       snippet = `You: ${lastMessage.content || ''}`
     } else if (isGroup && lastMessage.sender?.name) {
       snippet = `${lastMessage.sender.name}: ${lastMessage.content || ''}`
@@ -81,9 +85,22 @@ export default function ConversationItem({ conversation, isActive, onClick, curr
         </div>
 
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs text-slate-400 truncate flex-1 leading-snug">
-            {snippet}
-          </p>
+          <div className="flex items-center gap-1 min-w-0 flex-1">
+            {isLastMsgMine && lastMessage && (
+              <span className="shrink-0">
+                {lastMsgStatus === 'READ' ? (
+                  <CheckCheck className="w-3.5 h-3.5 text-sky-400 inline" aria-label="Read" />
+                ) : lastMsgStatus === 'DELIVERED' ? (
+                  <CheckCheck className="w-3.5 h-3.5 text-slate-400 inline" aria-label="Delivered" />
+                ) : (
+                  <Check className="w-3.5 h-3.5 text-slate-400 inline" aria-label="Sent" />
+                )}
+              </span>
+            )}
+            <p className="text-xs text-slate-400 truncate flex-1 leading-snug">
+              {snippet}
+            </p>
+          </div>
           {unreadCount > 0 && (
             <span className="flex-shrink-0 bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
               {unreadCount > 99 ? '99+' : unreadCount}

@@ -398,4 +398,96 @@ class WebSocketIntegrationTest {
         aliceSession.disconnect();
         bobSession.disconnect();
     }
+
+    @Test
+    void chatDeliveredAndRead_propagatedViaStomp() throws Exception {
+        WebSocketStompClient aliceClient = createClient();
+        WebSocketHttpHeaders aliceHeaders = new WebSocketHttpHeaders();
+        aliceHeaders.add("Origin", "http://localhost:5173");
+        aliceHeaders.add("Cookie", "vanni_at=" + aliceToken);
+        StompSession aliceSession = aliceClient.connectAsync(getWsUrl(), aliceHeaders, new StompSessionHandlerAdapter() {}).get(5, TimeUnit.SECONDS);
+
+        WebSocketStompClient bobClient = createClient();
+        WebSocketHttpHeaders bobHeaders = new WebSocketHttpHeaders();
+        bobHeaders.add("Origin", "http://localhost:5173");
+        bobHeaders.add("Cookie", "vanni_at=" + bobToken);
+        StompSession bobSession = bobClient.connectAsync(getWsUrl(), bobHeaders, new StompSessionHandlerAdapter() {}).get(5, TimeUnit.SECONDS);
+
+        BlockingQueue<String> aliceEvents = new LinkedBlockingQueue<>();
+        aliceSession.subscribe("/user/queue/events", new StompFrameHandler() {
+            @Override
+            public Type getPayloadType(StompHeaders headers) {
+                return String.class;
+            }
+            @Override
+            public void handleFrame(StompHeaders headers, Object payload) {
+                aliceEvents.offer((String) payload);
+            }
+        });
+
+        BlockingQueue<String> bobEvents = new LinkedBlockingQueue<>();
+        bobSession.subscribe("/user/queue/events", new StompFrameHandler() {
+            @Override
+            public Type getPayloadType(StompHeaders headers) {
+                return String.class;
+            }
+            @Override
+            public void handleFrame(StompHeaders headers, Object payload) {
+                bobEvents.offer((String) payload);
+            }
+        });
+
+        TimeUnit.MILLISECONDS.sleep(200);
+
+        // Alice sends message
+        String sendJson = String.format("""
+            {
+                "conversationId": %d,
+                "clientMessageId": "stomp-rcpt-001",
+                "content": "Verify receipt delivery"
+            }
+            """, conv.id());
+        aliceSession.send("/app/chat.send", sendJson);
+
+        String bobMsg = bobEvents.poll(5, TimeUnit.SECONDS);
+        assertThat(bobMsg).isNotNull();
+        assertThat(bobMsg).contains("\"type\":\"message.created\"");
+        aliceEvents.poll(5, TimeUnit.SECONDS); // Alice's echo
+
+        // Bob sends chat.delivered
+        String deliveredJson = String.format("""
+            {
+                "conversationId": %d,
+                "upToMessageId": 999999
+            }
+            """, conv.id());
+        bobSession.send("/app/chat.delivered", deliveredJson);
+
+        String aliceDeliveredEvt = aliceEvents.poll(5, TimeUnit.SECONDS);
+        assertThat(aliceDeliveredEvt).isNotNull();
+        assertThat(aliceDeliveredEvt).contains("\"type\":\"receipt.updated\"");
+        assertThat(aliceDeliveredEvt).contains("\"status\":\"DELIVERED\"");
+
+        // Bob sends chat.read
+        String readJson = String.format("""
+            {
+                "conversationId": %d,
+                "upToMessageId": 999999
+            }
+            """, conv.id());
+        bobSession.send("/app/chat.read", readJson);
+
+        String aliceReadEvt = aliceEvents.poll(5, TimeUnit.SECONDS);
+        assertThat(aliceReadEvt).isNotNull();
+        assertThat(aliceReadEvt).contains("\"type\":\"receipt.updated\"");
+        assertThat(aliceReadEvt).contains("\"status\":\"READ\"");
+
+        String bobUnreadEvt = bobEvents.poll(5, TimeUnit.SECONDS);
+        assertThat(bobUnreadEvt).isNotNull();
+        assertThat(bobUnreadEvt).contains("\"type\":\"unread.updated\"");
+        assertThat(bobUnreadEvt).contains("\"unreadCount\":0");
+
+        aliceSession.disconnect();
+        bobSession.disconnect();
+    }
 }
