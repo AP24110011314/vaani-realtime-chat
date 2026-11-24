@@ -31,11 +31,11 @@ Backend: register OK / duplicate email 409 / weak password 400; login OK / bad c
 Frontend: form validation, redirect when unauthenticated, redirect away from login when authenticated.
 
 ## Acceptance checklist
-- [ ] Register -> lands in `/app` signed in; cookies are HttpOnly (check DevTools).
-- [ ] Refresh the page keeps the session; logout clears it and `/app` redirects to `/login`.
-- [ ] Wrong password shows a generic error; 6th rapid attempt gets 429.
-- [ ] DB contains only BCrypt hashes.
-- [ ] Tests green; build passes.
+- [x] Register -> lands in `/app` signed in; cookies are HttpOnly (check DevTools).
+- [x] Refresh the page keeps the session; logout clears it and `/app` redirects to `/login`.
+- [x] Wrong password shows a generic error; 6th rapid attempt gets 429.
+- [x] DB contains only BCrypt hashes.
+- [x] Tests green; build passes.
 
 ## Commit
 ```bash
