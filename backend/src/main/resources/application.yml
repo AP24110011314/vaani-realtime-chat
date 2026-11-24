@@ -19,4 +19,9 @@ spring:
       max-file-size: ${MAX_UPLOAD_MB:10}MB
       max-request-size: ${MAX_UPLOAD_MB:10}MB
 
+storage:
+  provider: ${STORAGE_PROVIDER:local}
+  local:
+    dir: ${STORAGE_LOCAL_DIR:./uploads}
+
 

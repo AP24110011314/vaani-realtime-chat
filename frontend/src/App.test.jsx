@@ -19,6 +19,9 @@ import ChatHeader from './components/chat/ChatHeader'
 import MessageReceiptModal from './components/chat/MessageReceiptModal'
 import ToastNotification from './components/common/ToastNotification'
 import Sidebar from './components/chat/Sidebar'
+import AttachmentPreview from './components/chat/AttachmentPreview'
+import UserAvatar from './components/common/UserAvatar'
+import ProfilePage from './pages/ProfilePage'
 import * as useSocketModule from './hooks/useSocket'
 
 function createTestQueryClient() {
@@ -136,7 +139,7 @@ describe('MessageComposer', () => {
     fireEvent.change(textarea, { target: { value: 'Hello world' } })
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
 
-    expect(onSend).toHaveBeenCalledWith('Hello world')
+    expect(onSend).toHaveBeenCalledWith('Hello world', [])
     expect(textarea.value).toBe('')
   })
 
@@ -614,16 +617,18 @@ describe('Phase 5 Groups, Presence & System Messages', () => {
       ]
 
       render(
-        <QueryClientProvider client={queryClient}>
-          <AuthContext.Provider value={{ user: mockUser, logout: vi.fn() }}>
-            <Sidebar
-              conversations={convs}
-              activeId={null}
-              onSelectConversation={vi.fn()}
-              onStartDirectChat={vi.fn()}
-            />
-          </AuthContext.Provider>
-        </QueryClientProvider>
+        <MemoryRouter>
+          <QueryClientProvider client={queryClient}>
+            <AuthContext.Provider value={{ user: mockUser, logout: vi.fn() }}>
+              <Sidebar
+                conversations={convs}
+                activeId={null}
+                onSelectConversation={vi.fn()}
+                onStartDirectChat={vi.fn()}
+              />
+            </AuthContext.Provider>
+          </QueryClientProvider>
+        </MemoryRouter>
       )
 
       expect(screen.getByText('Chat With Bob')).toBeInTheDocument()
@@ -667,6 +672,140 @@ describe('Phase 5 Groups, Presence & System Messages', () => {
       expect(screen.getByText('Message Info')).toBeInTheDocument()
       expect(screen.getByText(/"Important update"/i)).toBeInTheDocument()
       expect(screen.getByText(/Recipients/i)).toBeInTheDocument()
+    })
+  })
+
+  describe('Phase 7 Attachments and Profile', () => {
+    it('renders UserAvatar with initials fallback and online indicator', () => {
+      const { rerender } = render(
+        <UserAvatar name="Alice Wonder" size="md" isOnline={true} />
+      )
+      expect(screen.getByText('A')).toBeInTheDocument()
+      expect(screen.getByTitle('Online')).toBeInTheDocument()
+
+      rerender(
+        <UserAvatar
+          src="https://example.com/avatar.png"
+          name="Alice Wonder"
+          size="md"
+          isOnline={false}
+        />
+      )
+      const img = screen.getByRole('img', { name: /Alice Wonder/i })
+      expect(img).toHaveAttribute('src', 'https://example.com/avatar.png')
+    })
+
+    it('renders AttachmentPreview with image thumbnails and file cards', () => {
+      const attachments = [
+        {
+          id: 1,
+          fileName: 'screenshot.png',
+          mimeType: 'image/png',
+          size: 204800,
+          url: '/api/attachments/1',
+        },
+        {
+          id: 2,
+          fileName: 'project-spec.pdf',
+          mimeType: 'application/pdf',
+          size: 1048576,
+          url: '/api/attachments/2',
+        },
+      ]
+
+      render(<AttachmentPreview attachments={attachments} isMine={false} />)
+
+      // Image thumbnail
+      const img = screen.getByRole('img', { name: /screenshot.png/i })
+      expect(img).toHaveAttribute('src', '/api/attachments/1')
+
+      // PDF file card
+      expect(screen.getByText('project-spec.pdf')).toBeInTheDocument()
+      expect(screen.getByText('1 MB')).toBeInTheDocument()
+      const downloadLink = screen.getByTitle('Download file')
+      expect(downloadLink).toHaveAttribute('href', '/api/attachments/2')
+    })
+
+    it('opens ImageLightbox when image thumbnail is clicked and closes on close button', () => {
+      const attachments = [
+        {
+          id: 1,
+          fileName: 'vacation.jpg',
+          mimeType: 'image/jpeg',
+          size: 512000,
+          url: '/api/attachments/1',
+        },
+      ]
+
+      render(<AttachmentPreview attachments={attachments} isMine={false} />)
+
+      const img = screen.getByRole('img', { name: /vacation.jpg/i })
+      fireEvent.click(img)
+
+      // Lightbox opened
+      expect(screen.getByLabelText('Close')).toBeInTheDocument()
+      expect(screen.getByLabelText('Download image')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByLabelText('Close'))
+      expect(screen.queryByLabelText('Close')).not.toBeInTheDocument()
+    })
+
+    it('rejects oversized files on the client in MessageComposer', async () => {
+      render(<MessageComposer onSendMessage={vi.fn()} disabled={false} />)
+
+      const largeFile = new File([new ArrayBuffer(12 * 1024 * 1024)], 'too-large.png', {
+        type: 'image/png',
+      })
+      const fileInput = document.querySelector('input[type="file"]')
+
+      fireEvent.change(fileInput, { target: { files: [largeFile] } })
+
+      await waitFor(() => {
+        expect(screen.getByText(/exceeds the 10 MB file limit/i)).toBeInTheDocument()
+      })
+    })
+
+    it('rejects disallowed file extensions on the client in MessageComposer', async () => {
+      render(<MessageComposer onSendMessage={vi.fn()} disabled={false} />)
+
+      const exeFile = new File(['executable content'], 'danger.exe', {
+        type: 'application/x-msdownload',
+      })
+      const fileInput = document.querySelector('input[type="file"]')
+
+      fireEvent.change(fileInput, { target: { files: [exeFile] } })
+
+      await waitFor(() => {
+        expect(screen.getByText(/is not permitted for upload/i)).toBeInTheDocument()
+      })
+    })
+
+    it('renders ProfilePage with display name, read-only email, and password change inputs', () => {
+      const mockUser = {
+        id: 1,
+        name: 'Alice Wonder',
+        email: 'alice@vanni.app',
+        about: 'Building awesome apps',
+        avatarUrl: null,
+        showLastSeen: true,
+        showReadReceipts: true,
+      }
+
+      render(
+        <MemoryRouter>
+          <AuthContext.Provider value={{ user: mockUser, updateUser: vi.fn(), logout: vi.fn() }}>
+            <ProfilePage />
+          </AuthContext.Provider>
+        </MemoryRouter>
+      )
+
+      expect(screen.getByRole('heading', { name: /Profile & Settings/i })).toBeInTheDocument()
+      expect(screen.getByDisplayValue('Alice Wonder')).toBeInTheDocument()
+      expect(screen.getByDisplayValue('alice@vanni.app')).toBeDisabled()
+      expect(screen.getByDisplayValue('Building awesome apps')).toBeInTheDocument()
+      expect(screen.getByPlaceholderText(/Enter your current password/i)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Save Changes/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Update Password/i })).toBeInTheDocument()
     })
   })
 })

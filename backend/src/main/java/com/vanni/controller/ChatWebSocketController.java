@@ -90,7 +90,15 @@ public class ChatWebSocketController {
                 );
             }
 
-            SendMessageRequest req = new SendMessageRequest(content, clientMessageId, replyToId);
+            List<Long> attachmentIds = null;
+            if (node.has("attachmentIds") && node.get("attachmentIds").isArray()) {
+                attachmentIds = new java.util.ArrayList<>();
+                for (JsonNode idNode : node.get("attachmentIds")) {
+                    attachmentIds.add(idNode.asLong());
+                }
+            }
+
+            SendMessageRequest req = new SendMessageRequest(content, clientMessageId, replyToId, attachmentIds);
             messageService.send(conversationId, senderId, req);
         } catch (ApiException ex) {
             log.warn("ChatWebSocketController error sending message: {}", ex.getMessage());

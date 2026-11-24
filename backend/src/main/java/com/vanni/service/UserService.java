@@ -20,10 +20,15 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PresenceService presenceService;
+    private final ConversationService conversationService;
 
-    public UserService(UserRepository userRepository, PresenceService presenceService) {
+    public UserService(
+            UserRepository userRepository,
+            PresenceService presenceService,
+            @org.springframework.context.annotation.Lazy ConversationService conversationService) {
         this.userRepository = userRepository;
         this.presenceService = presenceService;
+        this.conversationService = conversationService;
     }
 
     @Transactional(readOnly = true)
@@ -37,11 +42,14 @@ public class UserService {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "User not found"));
 
+        boolean profileChanged = false;
         if (req.name() != null && !req.name().isBlank()) {
             user.setName(req.name().trim());
+            profileChanged = true;
         }
         if (req.about() != null) {
             user.setAbout(req.about().trim());
+            profileChanged = true;
         }
         if (req.showLastSeen() != null) {
             user.setShowLastSeen(req.showLastSeen());
@@ -51,6 +59,9 @@ public class UserService {
         }
 
         user = userRepository.save(user);
+        if (profileChanged) {
+            conversationService.broadcastUserConversationsUpdated(userId);
+        }
         return AuthService.toUserMe(user);
     }
 

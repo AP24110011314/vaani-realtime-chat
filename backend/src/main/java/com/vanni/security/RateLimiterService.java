@@ -14,6 +14,7 @@ public class RateLimiterService {
 
     private final Map<String, Bucket> loginBuckets = new ConcurrentHashMap<>();
     private final Map<String, Bucket> registerBuckets = new ConcurrentHashMap<>();
+    private final Map<Long, Bucket> uploadBuckets = new ConcurrentHashMap<>();
 
     // 5 attempts per minute per key (IP + email)
     public boolean tryConsumeLogin(String key) {
@@ -27,6 +28,14 @@ public class RateLimiterService {
     public boolean tryConsumeRegister(String ip) {
         Bucket bucket = registerBuckets.computeIfAbsent(ip, k -> Bucket.builder()
             .addLimit(Bandwidth.classic(5, Refill.intervally(5, Duration.ofHours(1))))
+            .build());
+        return bucket.tryConsume(1);
+    }
+
+    // 20 uploads per hour per user
+    public boolean tryConsumeUpload(Long userId) {
+        Bucket bucket = uploadBuckets.computeIfAbsent(userId, k -> Bucket.builder()
+            .addLimit(Bandwidth.classic(20, Refill.intervally(20, Duration.ofHours(1))))
             .build());
         return bucket.tryConsume(1);
     }

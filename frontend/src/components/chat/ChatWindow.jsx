@@ -116,8 +116,10 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
 
   // Core send message logic supporting STOMP and REST fallback with 10s retry timeout
   const executeSend = useCallback(
-    async (content, clientMessageId) => {
-      if (!conversationId || !content.trim()) return
+    async (content, clientMessageId, attachmentIds = []) => {
+      const hasContent = Boolean(content && content.trim())
+      const hasAttachments = Boolean(attachmentIds && attachmentIds.length > 0)
+      if (!conversationId || (!hasContent && !hasAttachments)) return
 
       // Cancel any existing timer for this clientMessageId
       if (pendingTimersRef.current.has(clientMessageId)) {
@@ -138,9 +140,10 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
         const optimisticMsg = {
           id: null,
           conversationId: Number(conversationId),
-          content,
+          content: content ? content.trim() : null,
           clientMessageId,
           sender: { id: currentUserId },
+          attachments: [],
           isMine: true,
           pending: true,
           failed: false,
@@ -167,8 +170,9 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
       if (isConnected) {
         const published = sendMessage({
           conversationId: Number(conversationId),
-          content,
+          content: content ? content.trim() : '',
           clientMessageId,
+          attachmentIds,
         })
         if (published) {
           return
@@ -178,8 +182,9 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
       // Fall back to REST if disconnected or publish failed
       try {
         const saved = await messageApi.send(conversationId, {
-          content,
+          content: content ? content.trim() : '',
           clientMessageId,
+          attachmentIds,
         })
         clearTimeout(timeoutId)
         pendingTimersRef.current.delete(clientMessageId)
@@ -208,13 +213,14 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
     [conversationId, currentUserId, isConnected, queryClient, sendMessage]
   )
 
-  const handleSendMessage = (content) => {
+  const handleSendMessage = (content, attachmentIds = []) => {
     const clientMessageId = crypto.randomUUID()
-    executeSend(content, clientMessageId)
+    executeSend(content, clientMessageId, attachmentIds)
   }
 
   const handleRetryMessage = (message) => {
-    executeSend(message.content, message.clientMessageId)
+    const attachmentIds = message.attachments?.map((a) => a.id) || []
+    executeSend(message.content, message.clientMessageId, attachmentIds)
   }
 
   if (!conversationId) {

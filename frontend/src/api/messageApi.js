@@ -10,11 +10,12 @@ export const messageApi = {
     })
     return res.data
   },
-  send: async (conversationId, { content, clientMessageId, replyToId }) => {
+  send: async (conversationId, { content, clientMessageId, replyToId, attachmentIds }) => {
     const res = await http.post(`/conversations/${conversationId}/messages`, {
       content,
       clientMessageId,
       replyToId,
+      attachmentIds,
     })
     return res.data
   },

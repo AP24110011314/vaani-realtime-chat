@@ -24,11 +24,11 @@
 Reject: too large, disallowed type, `.exe` renamed `.png`, path-traversal file name. Authorization: non-member download 403/404; foreign attachmentId in send rejected. Avatar update reflected in conversation DTOs.
 
 ## Acceptance checklist
-- [ ] Send an image and a PDF; both arrive live and download correctly.
-- [ ] Spoofed extension rejected.
-- [ ] Another user's conversation attachment URL is inaccessible.
-- [ ] Avatar and name changes appear for other users without re-login.
-- [ ] No storage credentials in frontend bundle or logs.
+- [x] Send an image and a PDF; both arrive live and download correctly.
+- [x] Spoofed extension rejected.
+- [x] Another user's conversation attachment URL is inaccessible.
+- [x] Avatar and name changes appear for other users without re-login.
+- [x] No storage credentials in frontend bundle or logs.
 
 ## Commit
 ```bash

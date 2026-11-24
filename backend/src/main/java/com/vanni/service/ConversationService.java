@@ -388,11 +388,18 @@ public class ConversationService {
         return msg;
     }
 
-    private void broadcastConversationUpdated(Conversation conv) {
+    public void broadcastConversationUpdated(Conversation conv) {
         List<ConversationMember> activeMembers = conversationMemberRepository.findByConversationIdAndLeftAtIsNull(conv.getId());
         for (ConversationMember m : activeMembers) {
             ConversationDto memberDto = toDto(conv, m.getUser().getId());
             eventPublisher.sendToUser(m.getUser().getId(), "conversation.updated", memberDto);
+        }
+    }
+
+    public void broadcastUserConversationsUpdated(Long userId) {
+        List<ConversationMember> activeMemberships = conversationMemberRepository.findByUserIdAndLeftAtIsNull(userId);
+        for (ConversationMember cm : activeMemberships) {
+            broadcastConversationUpdated(cm.getConversation());
         }
     }
 

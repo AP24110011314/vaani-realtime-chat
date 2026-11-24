@@ -1,5 +1,6 @@
 import { formatTime } from '../../lib/formatters'
 import { Clock, AlertCircle, Check, CheckCheck } from 'lucide-react'
+import AttachmentPreview from './AttachmentPreview'
 
 export default function MessageBubble({ message, isMine, isGroup, onRetry, onShowReceipts }) {
   const isPending = message.pending
@@ -56,16 +57,23 @@ export default function MessageBubble({ message, isMine, isGroup, onRetry, onSho
           </div>
         )}
 
+        {/* Attachments if any */}
+        {message.attachments && message.attachments.length > 0 && !isDeleted && (
+          <AttachmentPreview attachments={message.attachments} isMine={isMine} />
+        )}
+
         {/* Message Content */}
-        <p className="whitespace-pre-wrap leading-relaxed select-text">
-          {isDeleted ? (
-            <span className="italic text-xs opacity-70">
-              This message was deleted
-            </span>
-          ) : (
-            message.content
-          )}
-        </p>
+        {(!isDeleted && message.content) || isDeleted ? (
+          <p className="whitespace-pre-wrap leading-relaxed select-text">
+            {isDeleted ? (
+              <span className="italic text-xs opacity-70">
+                This message was deleted
+              </span>
+            ) : (
+              message.content
+            )}
+          </p>
+        ) : null}
 
         {/* Footer timestamp & status indicators */}
         <div

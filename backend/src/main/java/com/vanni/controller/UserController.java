@@ -5,10 +5,13 @@ import com.vanni.dto.response.UserMeResponse;
 import com.vanni.dto.response.UserSummaryResponse;
 import com.vanni.security.CurrentUser;
 import com.vanni.security.UserPrincipal;
+import com.vanni.service.AttachmentService;
 import com.vanni.service.UserService;
 import jakarta.validation.Valid;
+import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -17,9 +20,11 @@ import java.util.List;
 public class UserController {
 
     private final UserService userService;
+    private final AttachmentService attachmentService;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, AttachmentService attachmentService) {
         this.userService = userService;
+        this.attachmentService = attachmentService;
     }
 
     @GetMapping("/me")
@@ -33,6 +38,24 @@ public class UserController {
             @Valid @RequestBody UpdateUserRequest req
     ) {
         return ResponseEntity.ok(userService.updateMe(principal.id(), req));
+    }
+
+    @PostMapping("/me/avatar")
+    public ResponseEntity<UserMeResponse> uploadAvatar(
+            @CurrentUser UserPrincipal principal,
+            @RequestParam("file") MultipartFile file
+    ) {
+        return ResponseEntity.ok(attachmentService.uploadAvatar(principal.id(), file));
+    }
+
+    @DeleteMapping("/me/avatar")
+    public ResponseEntity<UserMeResponse> deleteAvatar(@CurrentUser UserPrincipal principal) {
+        return ResponseEntity.ok(attachmentService.deleteAvatar(principal.id()));
+    }
+
+    @GetMapping("/{id}/avatar")
+    public ResponseEntity<Resource> getAvatar(@PathVariable Long id) {
+        return attachmentService.serveAvatar(id);
     }
 
     @GetMapping

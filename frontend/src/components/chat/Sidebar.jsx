@@ -1,8 +1,10 @@
 import { useState, useMemo } from 'react'
-import { Search, SquarePen, Users, LogOut, X } from 'lucide-react'
+import { Link } from 'react-router'
+import { Search, SquarePen, Users, LogOut, Settings, X } from 'lucide-react'
 import ConversationList from './ConversationList'
 import UserSearchModal from './UserSearchModal'
 import GroupCreateModal from './GroupCreateModal'
+import UserAvatar from '../common/UserAvatar'
 import { useAuth } from '../../hooks/useAuth'
 
 export default function Sidebar({
@@ -36,33 +38,26 @@ export default function Sidebar({
     <aside className="w-full h-full flex flex-col bg-slate-900 border-r border-slate-800 select-none">
       {/* Sidebar Header */}
       <div className="p-3.5 border-b border-slate-800 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="relative flex-shrink-0">
-            {user?.avatarUrl ? (
-              <img
-                src={user.avatarUrl}
-                alt={user.name}
-                className="w-9 h-9 rounded-full object-cover"
-              />
-            ) : (
-              <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-xs font-bold text-white shadow-inner">
-                {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
-              </div>
-            )}
-            <span
-              className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-slate-900"
-              title="Online"
-            />
-          </div>
+        <Link
+          to="/profile"
+          className="flex items-center gap-2.5 min-w-0 p-1 -m-1 rounded-xl hover:bg-slate-800/60 transition-colors group"
+          title="Edit Profile & Settings"
+        >
+          <UserAvatar
+            src={user?.avatarUrl}
+            name={user?.name}
+            size="sm"
+            isOnline={true}
+          />
           <div className="min-w-0">
-            <h2 className="text-sm font-bold text-white truncate leading-tight">
+            <h2 className="text-sm font-bold text-white truncate leading-tight group-hover:text-indigo-400 transition-colors">
               {user?.name}
             </h2>
             <p className="text-[11px] text-slate-400 truncate leading-tight">
               {user?.email}
             </p>
           </div>
-        </div>
+        </Link>
 
         <div className="flex items-center gap-1">
           <button
@@ -81,6 +76,14 @@ export default function Sidebar({
           >
             <SquarePen className="w-4 h-4" />
           </button>
+          <Link
+            to="/profile"
+            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"
+            title="Profile & Settings"
+            aria-label="Profile & Settings"
+          >
+            <Settings className="w-4 h-4" />
+          </Link>
           <button
             onClick={logout}
             className="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-xl transition-colors"
