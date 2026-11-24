@@ -1,0 +1,2 @@
+-- Vanni Database Seed Placeholder (Phase 1)
+-- Future phases will add development seed data here.
