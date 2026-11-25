@@ -14,6 +14,7 @@ import {
   Info,
 } from 'lucide-react'
 import AttachmentPreview from './AttachmentPreview'
+import VoicePlayer from './VoicePlayer'
 
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏']
 
@@ -182,9 +183,11 @@ export default function MessageBubble({
     return () => clearInterval(timer)
   }, [isMine, isDeleted, isPending, isFailed, message.createdAt])
 
+  const isVoice = message.messageType === 'VOICE' || message.type === 'VOICE'
   const canEdit = Boolean(
     isMine &&
       !isDeleted &&
+      !isVoice &&
       !isPending &&
       !isFailed &&
       message.createdAt &&
@@ -378,9 +381,17 @@ export default function MessageBubble({
           </div>
         )}
 
-        {/* Attachments if any */}
-        {message.attachments && message.attachments.length > 0 && !isDeleted && (
-          <AttachmentPreview attachments={message.attachments} isMine={isMine} />
+        {/* Voice Note Player OR Standard Attachments */}
+        {!isDeleted && message.attachments && message.attachments.length > 0 && (
+          isVoice ? (
+            <VoicePlayer
+              attachment={message.attachments[0]}
+              isMine={isMine}
+              disabled={isPending}
+            />
+          ) : (
+            <AttachmentPreview attachments={message.attachments} isMine={isMine} />
+          )
         )}
 
         {/* Message Content */}

@@ -33,6 +33,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 
@@ -44,6 +46,8 @@ public class AttachmentService {
 
     private static final long MAX_ATTACHMENT_SIZE = 10L * 1024 * 1024; // 10 MB
     private static final long MAX_AVATAR_SIZE = 2L * 1024 * 1024; // 2 MB
+    private static final int MAX_VOICE_DURATION_MS = 300_000; // 5 minutes
+    private static final int WAVEFORM_BARS = 64;
 
     private final AttachmentRepository attachmentRepository;
     private final StorageService storageService;
@@ -155,19 +159,83 @@ public class AttachmentService {
         return toDto(attachment);
     }
 
+    public AttachmentDto uploadVoice(Long uploaderId, MultipartFile file, Integer durationMs, String waveformBase64) {
+        if (file == null || file.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_FILE", "Audio file cannot be empty");
+        }
+        if (!rateLimiterService.tryConsumeUpload(uploaderId)) {
+            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "RATE_LIMITED", "Upload rate limit exceeded. Try again later.");
+        }
+        if (durationMs == null || durationMs <= 0 || durationMs > MAX_VOICE_DURATION_MS) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_DURATION", "Voice duration must be between 1 ms and 5 minutes");
+        }
+        if (waveformBase64 == null || waveformBase64.isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_WAVEFORM", "Waveform is required");
+        }
+        byte[] waveformBytes;
+        try {
+            waveformBytes = Base64.getDecoder().decode(waveformBase64.trim());
+        } catch (IllegalArgumentException e) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_WAVEFORM", "Waveform must be valid base64");
+        }
+        if (waveformBytes.length != WAVEFORM_BARS) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_WAVEFORM", "Waveform must contain exactly 64 bytes");
+        }
+        if (file.getSize() > MAX_ATTACHMENT_SIZE) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "FILE_TOO_LARGE", "Audio exceeds maximum size of 10MB");
+        }
+
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
+        } catch (IOException e) {
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "STORAGE_ERROR", "Failed to read audio file");
+        }
+        if (bytes.length > MAX_ATTACHMENT_SIZE) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "FILE_TOO_LARGE", "Audio exceeds maximum size of 10MB");
+        }
+
+        User uploader = userRepository.findById(uploaderId)
+            .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "User not found"));
+
+        MimeSniffer.SniffResult sniffResult = MimeSniffer.sniffAudio(bytes, file.getOriginalFilename());
+        String mimeType = sniffResult.mimeType();
+        String safeFileName = sniffResult.safeFileName();
+
+        String storageKey = UUID.randomUUID() + "-" + safeFileName;
+        storageService.put(storageKey, new ByteArrayInputStream(bytes), bytes.length, mimeType);
+
+        Attachment attachment = Attachment.builder()
+            .message(null)
+            .uploader(uploader)
+            .fileName(safeFileName)
+            .mimeType(mimeType)
+            .fileSize((long) bytes.length)
+            .storageKey(storageKey)
+            .durationMs(durationMs)
+            .waveform(waveformBytes)
+            .build();
+
+        attachment = attachmentRepository.save(attachment);
+        return toDto(attachment);
+    }
+
     @Transactional(readOnly = true)
     public ResponseEntity<Resource> serveAttachment(Long attachmentId, Long userId) {
+        return serveAttachment(attachmentId, userId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public ResponseEntity<Resource> serveAttachment(Long attachmentId, Long userId, String rangeHeader) {
         Attachment attachment = attachmentRepository.findById(attachmentId)
             .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "ATTACHMENT_NOT_FOUND", "Attachment not found"));
 
         // Membership check
         if (attachment.getMessage() == null) {
-            // Unattached: only accessible by the uploader
             if (!attachment.getUploader().getId().equals(userId)) {
                 throw new ApiException(HttpStatus.NOT_FOUND, "ATTACHMENT_NOT_FOUND", "Attachment not found");
             }
         } else {
-            // Attached: only accessible by members of the conversation
             Long convId = attachment.getMessage().getConversation().getId();
             boolean isMember = conversationMemberRepository.existsByConversationIdAndUserIdAndLeftAtIsNull(convId, userId);
             if (!isMember) {
@@ -175,22 +243,83 @@ public class AttachmentService {
             }
         }
 
+        long totalSize = attachment.getFileSize() != null ? attachment.getFileSize() : 0L;
+        String mime = attachment.getMimeType() != null ? attachment.getMimeType() : "application/octet-stream";
+        String disposition = (mime.startsWith("image/") || "application/pdf".equals(mime) || mime.startsWith("audio/"))
+            ? "inline; filename=\"" + attachment.getFileName() + "\""
+            : "attachment; filename=\"" + attachment.getFileName() + "\"";
+
+        if (rangeHeader != null && !rangeHeader.isBlank()) {
+            long[] range = parseByteRange(rangeHeader.trim(), totalSize);
+            if (range == null) {
+                return ResponseEntity.status(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                    .header(HttpHeaders.CONTENT_RANGE, "bytes */" + totalSize)
+                    .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                    .build();
+            }
+            long start = range[0];
+            long end = range[1];
+            long contentLength = end - start + 1;
+            InputStream slice = storageService.getRange(attachment.getStorageKey(), start, contentLength);
+            return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition)
+                .header("X-Content-Type-Options", "nosniff")
+                .header(HttpHeaders.CACHE_CONTROL, "private, max-age=3600")
+                .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                .header(HttpHeaders.CONTENT_RANGE, "bytes " + start + "-" + end + "/" + totalSize)
+                .header(HttpHeaders.CONTENT_TYPE, mime)
+                .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(contentLength))
+                .body(new InputStreamResource(slice));
+        }
+
         InputStream is = storageService.get(attachment.getStorageKey());
         Resource resource = new InputStreamResource(is);
-
-        String disposition;
-        if (attachment.getMimeType().startsWith("image/") || "application/pdf".equals(attachment.getMimeType())) {
-            disposition = "inline; filename=\"" + attachment.getFileName() + "\"";
-        } else {
-            disposition = "attachment; filename=\"" + attachment.getFileName() + "\"";
-        }
 
         return ResponseEntity.ok()
             .header(HttpHeaders.CONTENT_DISPOSITION, disposition)
             .header("X-Content-Type-Options", "nosniff")
-            .header(HttpHeaders.CONTENT_TYPE, attachment.getMimeType())
-            .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(attachment.getFileSize()))
+            .header(HttpHeaders.CACHE_CONTROL, "private, max-age=3600")
+            .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+            .header(HttpHeaders.CONTENT_TYPE, mime)
+            .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(totalSize))
             .body(resource);
+    }
+
+    private long[] parseByteRange(String header, long totalSize) {
+        if (totalSize <= 0 || !header.startsWith("bytes=")) {
+            return null;
+        }
+        String spec = header.substring("bytes=".length()).trim();
+        int comma = spec.indexOf(',');
+        if (comma >= 0) {
+            spec = spec.substring(0, comma).trim();
+        }
+        int dash = spec.indexOf('-');
+        if (dash < 0) {
+            return null;
+        }
+        String startPart = spec.substring(0, dash).trim();
+        String endPart = spec.substring(dash + 1).trim();
+        try {
+            long start;
+            long end;
+            if (startPart.isEmpty()) {
+                if (endPart.isEmpty()) return null;
+                long suffix = Long.parseLong(endPart);
+                if (suffix <= 0) return null;
+                start = Math.max(0L, totalSize - suffix);
+                end = totalSize - 1;
+            } else {
+                start = Long.parseLong(startPart);
+                end = endPart.isEmpty() ? totalSize - 1 : Math.min(Long.parseLong(endPart), totalSize - 1);
+            }
+            if (start < 0 || start >= totalSize || start > end) {
+                return null;
+            }
+            return new long[]{start, end};
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     public UserMeResponse uploadAvatar(Long userId, MultipartFile file) {
@@ -306,7 +435,20 @@ public class AttachmentService {
             a.getFileSize() != null ? a.getFileSize() : 0L,
             "/api/attachments/" + a.getId(),
             a.getWidth(),
-            a.getHeight()
+            a.getHeight(),
+            a.getDurationMs(),
+            decodeWaveformInts(a.getWaveform())
         );
+    }
+
+    public static List<Integer> decodeWaveformInts(byte[] raw) {
+        if (raw == null || raw.length == 0) {
+            return null;
+        }
+        List<Integer> list = new ArrayList<>(raw.length);
+        for (byte b : raw) {
+            list.add(b & 0xFF);
+        }
+        return list;
     }
 }

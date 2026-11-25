@@ -98,7 +98,16 @@ public class ChatWebSocketController {
                 }
             }
 
-            SendMessageRequest req = new SendMessageRequest(content, clientMessageId, replyToId, attachmentIds);
+            com.vanni.entity.MessageType type = null;
+            if (node.has("type") && !node.get("type").isNull()) {
+                try {
+                    type = com.vanni.entity.MessageType.valueOf(node.get("type").asText().trim().toUpperCase());
+                } catch (IllegalArgumentException ignored) {
+                    // Invalid type falls through cleanly to default inference
+                }
+            }
+
+            SendMessageRequest req = new SendMessageRequest(content, clientMessageId, replyToId, attachmentIds, type);
             messageService.send(conversationId, senderId, req);
         } catch (ApiException ex) {
             log.warn("ChatWebSocketController error sending message: {}", ex.getMessage());

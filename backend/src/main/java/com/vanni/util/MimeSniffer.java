@@ -25,6 +25,14 @@ public class MimeSniffer {
         "application/vnd.openxmlformats-officedocument.presentationml.presentation"
     );
 
+    private static final Set<String> AUDIO_MIMES = Set.of(
+        "audio/webm",
+        "audio/ogg",
+        "audio/mp4",
+        "audio/mpeg",
+        "audio/x-m4a"
+    );
+
     private static final Set<String> BLOCKED_EXTENSIONS = Set.of(
         "exe", "sh", "bat", "cmd", "js", "html", "htm", "svg", "vbs", "jar", "ps1", "py", "bin", "msi", "dll", "so", "dylib", "com"
     );
@@ -83,6 +91,93 @@ public class MimeSniffer {
         }
 
         return new SniffResult(detectedMime, safeBase);
+    }
+
+    public static SniffResult sniffAudio(byte[] data, String originalFilename) {
+        if (data == null || data.length == 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_FILE", "Audio file is empty");
+        }
+
+        String safeBase = extractSafeBaseName(originalFilename, "voice.webm");
+        String ext = extractExtension(safeBase);
+
+        if (BLOCKED_EXTENSIONS.contains(ext)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "DISALLOWED_FILE_TYPE", "File extension is not permitted");
+        }
+        if (isExecutableOrScript(data)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "DISALLOWED_FILE_TYPE", "Executable or script content detected");
+        }
+
+        String detected = detectAudioMime(data, ext);
+        if (detected == null || !AUDIO_MIMES.contains(detected)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "DISALLOWED_FILE_TYPE", "File is not a supported audio format");
+        }
+        validateAudioExtensionAgainstMime(ext, detected);
+
+        String cleanName = safeBase.replaceAll("[^a-zA-Z0-9._-]", "_");
+        if (cleanName.length() > 100) {
+            cleanName = cleanName.substring(0, 100);
+        }
+        return new SniffResult(detected, cleanName);
+    }
+
+    private static String extractSafeBaseName(String originalFilename, String fallback) {
+        String rawName = originalFilename != null ? originalFilename : fallback;
+        Path p = Paths.get(rawName).getFileName();
+        String baseName = p != null ? p.toString() : fallback;
+        baseName = baseName.replace("..", "").replace("/", "").replace("\\", "").trim();
+        if (baseName.isEmpty() || baseName.equals(".")) {
+            return fallback;
+        }
+        return baseName;
+    }
+
+    private static String extractExtension(String baseName) {
+        int dot = baseName.lastIndexOf('.');
+        return dot >= 0 ? baseName.substring(dot + 1).toLowerCase(Locale.ROOT) : "";
+    }
+
+    private static String detectAudioMime(byte[] data, String ext) {
+        // OGG: OggS
+        if (data.length >= 4 && data[0] == 'O' && data[1] == 'g' && data[2] == 'g' && data[3] == 'S') {
+            return "audio/ogg";
+        }
+        // WebM / EBML: 1A 45 DF A3
+        if (data.length >= 4 && (data[0] & 0xFF) == 0x1A && (data[1] & 0xFF) == 0x45
+                && (data[2] & 0xFF) == 0xDF && (data[3] & 0xFF) == 0xA3) {
+            return "audio/webm";
+        }
+        // MP4 / M4A: ....ftyp
+        if (data.length >= 12 && data[4] == 'f' && data[5] == 't' && data[6] == 'y' && data[7] == 'p') {
+            String brand = new String(data, 8, 4, StandardCharsets.US_ASCII);
+            if ("M4A ".equals(brand) || "m4a".equals(ext)) {
+                return "audio/x-m4a";
+            }
+            return "audio/mp4";
+        }
+        // MP3: ID3 tag or MPEG frame sync
+        if (data.length >= 3 && data[0] == 'I' && data[1] == 'D' && data[2] == '3') {
+            return "audio/mpeg";
+        }
+        if (data.length >= 2 && (data[0] & 0xFF) == 0xFF && (data[1] & 0xE0) == 0xE0 && (data[1] & 0x06) != 0) {
+            return "audio/mpeg";
+        }
+        return null;
+    }
+
+    private static void validateAudioExtensionAgainstMime(String ext, String mime) {
+        if ("webm".equals(ext) && !"audio/webm".equals(mime)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "DISALLOWED_FILE_TYPE", "File content does not match .webm extension");
+        }
+        if (("ogg".equals(ext) || "oga".equals(ext) || "opus".equals(ext)) && !"audio/ogg".equals(mime)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "DISALLOWED_FILE_TYPE", "File content does not match .ogg extension");
+        }
+        if ("mp3".equals(ext) && !"audio/mpeg".equals(mime)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "DISALLOWED_FILE_TYPE", "File content does not match .mp3 extension");
+        }
+        if (("mp4".equals(ext) || "m4a".equals(ext)) && !"audio/mp4".equals(mime) && !"audio/x-m4a".equals(mime)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "DISALLOWED_FILE_TYPE", "File content does not match MP4/M4A extension");
+        }
     }
 
     private static boolean isExecutableOrScript(byte[] data) {

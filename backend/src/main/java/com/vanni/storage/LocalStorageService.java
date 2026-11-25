@@ -58,6 +58,54 @@ public class LocalStorageService implements StorageService {
     }
 
     @Override
+    public InputStream getRange(String key, long offset, long length) {
+        try {
+            Path targetFile = storageDir.resolve(key).normalize();
+            if (!targetFile.startsWith(storageDir) || !Files.exists(targetFile)) {
+                throw new ApiException(HttpStatus.NOT_FOUND, "FILE_NOT_FOUND", "File not found in storage");
+            }
+            RandomAccessFile raf = new RandomAccessFile(targetFile.toFile(), "r");
+            raf.seek(offset);
+            return new BoundedRandomAccessInputStream(raf, length);
+        } catch (IOException e) {
+            log.error("Failed to read range for key {}", key, e);
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "STORAGE_ERROR", "Failed to read file range from storage");
+        }
+    }
+
+    private static final class BoundedRandomAccessInputStream extends InputStream {
+        private final RandomAccessFile raf;
+        private long remaining;
+
+        BoundedRandomAccessInputStream(RandomAccessFile raf, long length) {
+            this.raf = raf;
+            this.remaining = length;
+        }
+
+        @Override
+        public int read() throws IOException {
+            if (remaining <= 0) return -1;
+            int b = raf.read();
+            if (b != -1) remaining--;
+            return b;
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            if (remaining <= 0) return -1;
+            int toRead = (int) Math.min(len, remaining);
+            int read = raf.read(b, off, toRead);
+            if (read > 0) remaining -= read;
+            return read;
+        }
+
+        @Override
+        public void close() throws IOException {
+            raf.close();
+        }
+    }
+
+    @Override
     public void delete(String key) {
         try {
             Path targetFile = storageDir.resolve(key).normalize();

@@ -116,7 +116,7 @@ class SecurityChecklistIntegrationTest {
             .andExpect(header().string("X-Frame-Options", "DENY"))
             .andExpect(header().string("Referrer-Policy", "no-referrer"))
             .andExpect(header().exists("Content-Security-Policy"))
-            .andExpect(header().string("Permissions-Policy", "camera=(), microphone=(), geolocation=()"))
+            .andExpect(header().string("Permissions-Policy", "camera=(), microphone=(self), geolocation=()"))
             .andExpect(header().string("X-Request-Id", "sec-check-001"));
     }
 

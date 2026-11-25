@@ -9,6 +9,12 @@ export default defineConfig({
     channel: 'chrome',
     headless: true,
     trace: 'on-first-retry',
+    launchOptions: {
+      args: [
+        '--use-fake-device-for-media-stream',
+        '--use-fake-ui-for-media-stream',
+      ],
+    },
   },
   webServer: [
     {

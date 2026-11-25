@@ -12,11 +12,14 @@ import {
   Reply,
   Pencil,
   AtSign,
+  Mic,
 } from 'lucide-react'
 import { attachmentApi } from '../../api/attachmentApi'
 import { conversationApi } from '../../api/conversationApi'
 import { formatFileSize } from '../../lib/formatters'
+import { isVoiceRecordingSupported } from '../../lib/voiceUtils'
 import MentionPicker from './MentionPicker'
+import VoiceRecorder from './VoiceRecorder'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 const MAX_MESSAGE_LENGTH = 4000
@@ -93,6 +96,8 @@ export default function MessageComposer({
   const [isDragging, setIsDragging] = useState(false)
   const [composerError, setComposerError] = useState(null)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false)
+  const voiceSupported = isVoiceRecordingSupported()
 
   // Mention picker state
   const [mentionTrigger, setMentionTrigger] = useState(null) // { start, end, query }
@@ -497,10 +502,28 @@ export default function MessageComposer({
   }
 
   const isUploadingAny = attachments.some((a) => a.isUploading)
+  const showMicButton =
+    voiceSupported &&
+    content.length === 0 &&
+    attachments.length === 0 &&
+    !editingMessage
   const canSend =
     !disabled &&
     !isUploadingAny &&
     (Boolean(content.trim()) || attachments.some((a) => a.dto))
+
+  const handleVoiceUploaded = (dto) => {
+    setIsRecordingVoice(false)
+    setComposerError(null)
+    onStopTyping?.()
+    onSendMessage?.({
+      content: '',
+      attachmentIds: [dto.id],
+      attachments: [dto],
+      replyToId: replyTo?.id || null,
+      type: 'VOICE',
+    })
+  }
 
   return (
     <div
@@ -661,7 +684,14 @@ export default function MessageComposer({
         </div>
       )}
 
-      {/* Floating Glass Pill Composer */}
+      {/* Floating Glass Pill Composer OR Inline Voice Recorder */}
+      {isRecordingVoice ? (
+        <VoiceRecorder
+          onUploaded={handleVoiceUploaded}
+          onCancel={() => setIsRecordingVoice(false)}
+          onError={(msg) => setComposerError(msg)}
+        />
+      ) : (
       <div className="flex items-end gap-1.5 glass-strong rounded-[26px] p-1.5 pl-2.5 focus-within:border-[var(--accent-solid)] focus-within:ring-2 focus-within:ring-[var(--accent-glow)] transition-all relative">
         {/* Mention Picker Popover */}
         <MentionPicker
@@ -753,24 +783,50 @@ export default function MessageComposer({
           </span>
         )}
 
-        {/* Circular Gradient Send Button */}
-        <button
-          type="button"
-          onClick={handleSend}
-          disabled={!canSend}
-          className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-150 focus-accent cursor-pointer ${
-            editingMessage
-              ? 'bg-amber-500 hover:bg-amber-400 text-[#15151C] shadow-md scale-100'
-              : canSend
-              ? 'btn-accent scale-100 opacity-100'
-              : 'glass-subtle text-ink-subtle opacity-45 scale-90 cursor-not-allowed'
-          }`}
-          aria-label={editingMessage ? 'Save edit' : 'Send message'}
-          title={editingMessage ? 'Save edit' : 'Send message'}
-        >
-          <SendHorizonal className="w-4 h-4" />
-        </button>
+        {/* Mic Button (when empty & supported) or Circular Gradient Send Button */}
+        {showMicButton ? (
+          <button
+            type="button"
+            onClick={() => {
+              setComposerError(null)
+              setIsRecordingVoice(true)
+            }}
+            disabled={disabled}
+            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 btn-accent transition-all duration-150 focus-accent cursor-pointer disabled:opacity-45"
+            aria-label="Record voice message"
+            title="Record voice message"
+          >
+            <Mic className="w-4 h-4" />
+          </button>
+        ) : (
+          <span
+            className="flex-shrink-0"
+            title={
+              !voiceSupported && content.length === 0 && attachments.length === 0
+                ? 'Voice recording is not supported in this browser'
+                : undefined
+            }
+          >
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={!canSend}
+              className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-150 focus-accent cursor-pointer ${
+                editingMessage
+                  ? 'bg-amber-500 hover:bg-amber-400 text-[#15151C] shadow-md scale-100'
+                  : canSend
+                  ? 'btn-accent scale-100 opacity-100'
+                  : 'glass-subtle text-ink-subtle opacity-45 scale-90 cursor-not-allowed'
+              }`}
+              aria-label={editingMessage ? 'Save edit' : 'Send message'}
+              title={editingMessage ? 'Save edit' : 'Send message'}
+            >
+              <SendHorizonal className="w-4 h-4" />
+            </button>
+          </span>
+        )}
       </div>
+      )}
     </div>
   )
 }

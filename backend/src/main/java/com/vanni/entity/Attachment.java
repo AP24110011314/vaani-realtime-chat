@@ -44,6 +44,12 @@ public class Attachment {
     @Column
     private Integer height;
 
+    @Column(name = "duration_ms")
+    private Integer durationMs;
+
+    @Column(name = "waveform", columnDefinition = "VARBINARY(64)")
+    private byte[] waveform;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

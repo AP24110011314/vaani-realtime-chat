@@ -34,10 +34,10 @@
 Server rejects: non-audio disguised as audio, too long, too large, bad waveform length, foreign attachment id; Range requests return correct bytes; non-member cannot stream. Frontend: format selection helper, waveform reduction, recorder state machine (mock MediaRecorder). Playwright (Chromium with `--use-fake-device-for-media-stream --use-fake-ui-for-media-stream`): record 3 s, send, other user plays it.
 
 ## Acceptance checklist
-- [ ] Record, cancel, and send work in Chrome and Safari (manually check Safari if available).
-- [ ] The recipient sees the waveform instantly and can play, seek and change speed.
-- [ ] Seeking works (Range support) and a non-member gets 403/404.
-- [ ] Microphone indicator turns off after sending or cancelling.
+- [x] Record, cancel, and send work in Chrome (Safari recording: NEEDS MANUAL CHECK in PROGRESS.md).
+- [x] The recipient sees the waveform instantly and can play, seek and change speed.
+- [x] Seeking works (Range support) and a non-member gets 403/404.
+- [x] Microphone indicator turns off after sending or cancelling.
 
 ## Commit
 ```bash

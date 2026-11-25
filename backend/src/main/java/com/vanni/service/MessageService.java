@@ -173,8 +173,23 @@ public class MessageService {
             }
         }
 
+        boolean requestedVoice = req.type() == MessageType.VOICE;
+        boolean hasVoiceAttachment = attachments.stream()
+            .anyMatch(a -> a.getDurationMs() != null || (a.getMimeType() != null && a.getMimeType().startsWith("audio/")));
+
         MessageType messageType = MessageType.TEXT;
-        if (!attachments.isEmpty()) {
+        if (requestedVoice || hasVoiceAttachment) {
+            if (!content.isEmpty()) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Voice messages cannot contain text");
+            }
+            if (attachments.size() != 1
+                    || attachments.get(0).getDurationMs() == null
+                    || attachments.get(0).getMimeType() == null
+                    || !attachments.get(0).getMimeType().startsWith("audio/")) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Voice messages require exactly one voice attachment");
+            }
+            messageType = MessageType.VOICE;
+        } else if (!attachments.isEmpty()) {
             boolean allImages = attachments.stream()
                 .allMatch(a -> a.getMimeType() != null && a.getMimeType().startsWith("image/"));
             messageType = allImages ? MessageType.IMAGE : MessageType.FILE;
@@ -278,6 +293,9 @@ public class MessageService {
 
         if (message.getDeletedAt() != null) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "MESSAGE_DELETED", "Cannot edit a deleted message");
+        }
+        if (message.getMessageType() == MessageType.VOICE) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_OPERATION", "Voice messages cannot be edited");
         }
 
         if (Duration.between(message.getCreatedAt(), Instant.now()).toMinutes() > 15) {
@@ -587,6 +605,10 @@ public class MessageService {
             String snippet;
             if (r.getDeletedAt() != null) {
                 snippet = "This message was deleted";
+            } else if (r.getMessageType() == MessageType.VOICE) {
+                List<Attachment> replyAtts = attachmentRepository.findByMessageId(r.getId());
+                Integer durMs = replyAtts.isEmpty() ? null : replyAtts.get(0).getDurationMs();
+                snippet = formatVoicePreview(durMs);
             } else {
                 List<MessageMention> replyMentions = messageMentionRepository.findByMessageIdWithUser(r.getId());
                 Map<Long, String> replyNames = replyMentions.stream()
@@ -600,9 +622,17 @@ public class MessageService {
         }
 
         String rawContent = message.getDeletedAt() != null ? null : message.getContent();
-        String previewText = rawContent != null
-            ? MentionParser.renderDisplayText(rawContent, namesById, message.isMentionsAll())
-            : null;
+        String previewText;
+        if (message.getDeletedAt() != null) {
+            previewText = null;
+        } else if (message.getMessageType() == MessageType.VOICE) {
+            Integer durMs = (attachments != null && !attachments.isEmpty()) ? attachments.get(0).durationMs() : null;
+            previewText = formatVoicePreview(durMs);
+        } else {
+            previewText = rawContent != null
+                ? MentionParser.renderDisplayText(rawContent, namesById, message.isMentionsAll())
+                : null;
+        }
 
         return new MessageDto(
             message.getId(),
@@ -667,6 +697,11 @@ public class MessageService {
             .toList();
     }
 
+    private static String formatVoicePreview(Integer durationMs) {
+        int totalSec = durationMs != null ? Math.max(0, Math.round(durationMs / 1000.0f)) : 0;
+        return String.format("Voice message %d:%02d", totalSec / 60, totalSec % 60);
+    }
+
     public AttachmentDto toAttachmentDto(Attachment a) {
         return new AttachmentDto(
             a.getId(),
@@ -675,7 +710,9 @@ public class MessageService {
             a.getFileSize() != null ? a.getFileSize() : 0L,
             "/api/attachments/" + a.getId(),
             a.getWidth(),
-            a.getHeight()
+            a.getHeight(),
+            a.getDurationMs(),
+            AttachmentService.decodeWaveformInts(a.getWaveform())
         );
     }
 }

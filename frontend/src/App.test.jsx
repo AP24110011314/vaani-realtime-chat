@@ -11,6 +11,14 @@ import ProtectedRoute from './routes/ProtectedRoute'
 import PublicOnlyRoute from './routes/PublicOnlyRoute'
 import AppRoutes from './routes/AppRoutes'
 import { inviteApi } from './api/inviteApi'
+import { attachmentApi } from './api/attachmentApi'
+import VoicePlayer from './components/chat/VoicePlayer'
+import {
+  selectSupportedAudioMime,
+  reduceWaveform,
+  encodeWaveformBase64,
+  formatDurationClock,
+} from './lib/voiceUtils'
 import MessageComposer from './components/chat/MessageComposer'
 import ConversationList from './components/chat/ConversationList'
 import ConversationItem from './components/chat/ConversationItem'
@@ -1492,6 +1500,212 @@ describe('Phase 5 Groups, Presence & System Messages', () => {
       createSpy.mockRestore()
       revokeSpy.mockRestore()
       approveSpy.mockRestore()
+    })
+  })
+
+  describe('Phase 13: Voice Messages', () => {
+    it('selects supported audio MIME type and reduces waveform to 64 bytes', () => {
+      const chromeRec = { isTypeSupported: (t) => t === 'audio/webm;codecs=opus' }
+      const safariRec = { isTypeSupported: (t) => t === 'audio/mp4' }
+      const noneRec = { isTypeSupported: () => false }
+
+      expect(selectSupportedAudioMime(chromeRec)).toEqual({ mimeType: 'audio/webm;codecs=opus', extension: 'webm' })
+      expect(selectSupportedAudioMime(safariRec)).toEqual({ mimeType: 'audio/mp4', extension: 'm4a' })
+      expect(selectSupportedAudioMime(noneRec)).toBeNull()
+
+      const samples = Array.from({ length: 200 }, (_, i) => (i * 3) % 300)
+      const bars = reduceWaveform(samples, 64)
+      expect(bars).toHaveLength(64)
+      expect(bars.every((b) => b >= 0 && b <= 255)).toBe(true)
+
+      const b64 = encodeWaveformBase64(bars)
+      expect(atob(b64)).toHaveLength(64)
+      expect(formatDurationClock(42000)).toBe('0:42')
+      expect(formatDurationClock(125000)).toBe('2:05')
+    })
+
+    it('records, pauses/resumes, cancels and uploads voice notes via mocked MediaRecorder', async () => {
+      const origMediaRecorder = globalThis.MediaRecorder
+      const origMediaDevices = navigator.mediaDevices
+      const origCreateObjUrl = URL.createObjectURL
+      const origRevokeObjUrl = URL.revokeObjectURL
+
+      const trackStop = vi.fn()
+      const mockStream = { getTracks: () => [{ stop: trackStop }] }
+      const recorderInstances = []
+
+      class MockMediaRecorder {
+        static isTypeSupported(t) {
+          return t === 'audio/webm;codecs=opus'
+        }
+        constructor(stream, opts) {
+          this.stream = stream
+          this.mimeType = opts?.mimeType
+          this.state = 'inactive'
+          this.ondataavailable = null
+          this.onstop = null
+          recorderInstances.push(this)
+        }
+        start() {
+          this.state = 'recording'
+        }
+        pause() {
+          this.state = 'paused'
+        }
+        resume() {
+          this.state = 'recording'
+        }
+        stop() {
+          this.state = 'inactive'
+          this.ondataavailable?.({ data: new Blob(['webmdata'], { type: this.mimeType }) })
+          this.onstop?.()
+        }
+      }
+
+      globalThis.MediaRecorder = MockMediaRecorder
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: { getUserMedia: vi.fn().mockResolvedValue(mockStream) },
+      })
+      URL.createObjectURL = vi.fn(() => 'blob:mock-voice')
+      URL.revokeObjectURL = vi.fn()
+
+      const uploadVoiceSpy = vi.spyOn(attachmentApi, 'uploadVoice').mockResolvedValueOnce({
+        id: 77,
+        fileName: 'voice-note.webm',
+        mimeType: 'audio/webm',
+        size: 1024,
+        url: '/api/attachments/77',
+        durationMs: 2500,
+        waveform: Array(64).fill(120),
+      })
+      const onSend = vi.fn()
+
+      try {
+        render(<MessageComposer onSendMessage={onSend} disabled={false} />)
+
+        // Empty composer shows Mic button when MediaRecorder is supported
+        const micBtn = screen.getByRole('button', { name: 'Record voice message' })
+        fireEvent.click(micBtn)
+
+        await waitFor(() => {
+          expect(screen.getByRole('region', { name: 'Voice message recorder' })).toBeInTheDocument()
+          expect(recorderInstances.length).toBe(1)
+        })
+
+        // Pause & resume recording
+        fireEvent.click(screen.getByRole('button', { name: 'Pause recording' }))
+        expect(recorderInstances[0].state).toBe('paused')
+        fireEvent.click(screen.getByRole('button', { name: 'Resume recording' }))
+        expect(recorderInstances[0].state).toBe('recording')
+
+        // Cancel stops tracks cleanly
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel voice recording' }))
+        expect(trackStop).toHaveBeenCalled()
+        expect(screen.getByRole('button', { name: 'Record voice message' })).toBeInTheDocument()
+
+        // Start a second recording, fake >=1s elapsed, and send
+        const nowSpy = vi.spyOn(Date, 'now')
+        let fakeNow = 10000
+        nowSpy.mockImplementation(() => fakeNow)
+
+        fireEvent.click(screen.getByRole('button', { name: 'Record voice message' }))
+        await waitFor(() => expect(recorderInstances.length).toBe(2))
+
+        fakeNow = 12500 // +2.5s elapsed
+        await new Promise((r) => setTimeout(r, 200))
+        fireEvent.click(screen.getByRole('button', { name: 'Send voice message' }))
+
+        await waitFor(() => {
+          expect(uploadVoiceSpy).toHaveBeenCalled()
+          expect(onSend).toHaveBeenCalledWith(
+            expect.objectContaining({
+              type: 'VOICE',
+              attachmentIds: [77],
+            })
+          )
+        })
+        nowSpy.mockRestore()
+      } finally {
+        uploadVoiceSpy.mockRestore()
+        globalThis.MediaRecorder = origMediaRecorder
+        Object.defineProperty(navigator, 'mediaDevices', {
+          configurable: true,
+          value: origMediaDevices,
+        })
+        URL.createObjectURL = origCreateObjUrl
+        URL.revokeObjectURL = origRevokeObjUrl
+      }
+    })
+
+    it('renders VoicePlayer slider, cycles speed, and enforces single-active playback', async () => {
+      const origAudio = globalThis.Audio
+      const audioInstances = []
+      class MockAudio {
+        constructor(src) {
+          this.src = src
+          this.playbackRate = 1
+          this.currentTime = 0
+          this.duration = 42
+          this.paused = true
+          this.listeners = {}
+          audioInstances.push(this)
+        }
+        addEventListener(ev, fn) {
+          this.listeners[ev] = fn
+        }
+        removeEventListener(ev) {
+          delete this.listeners[ev]
+        }
+        play() {
+          this.paused = false
+          this.listeners.play?.()
+          return Promise.resolve()
+        }
+        pause() {
+          this.paused = true
+          this.listeners.pause?.()
+        }
+      }
+      globalThis.Audio = MockAudio
+
+      try {
+        const wf = Array(64).fill(90)
+        render(
+          <div>
+            <VoicePlayer
+              attachment={{ id: 1, url: '/api/attachments/1', durationMs: 42000, waveform: wf }}
+              isMine={true}
+            />
+            <VoicePlayer
+              attachment={{ id: 2, url: '/api/attachments/2', durationMs: 18000, waveform: wf }}
+              isMine={false}
+            />
+          </div>
+        )
+
+        const playBtns = screen.getAllByRole('button', { name: 'Play voice message' })
+        expect(playBtns).toHaveLength(2)
+        expect(screen.getAllByRole('slider', { name: 'Voice message progress' })[0]).toHaveAttribute('aria-valuenow', '0')
+
+        // Play first voice note & cycle speed
+        fireEvent.click(playBtns[0])
+        await waitFor(() => expect(audioInstances[0].paused).toBe(false))
+
+        const speedBtn = screen.getAllByRole('button', { name: /Playback speed/i })[0]
+        fireEvent.click(speedBtn)
+        expect(speedBtn).toHaveTextContent('1.5x')
+        expect(audioInstances[0].playbackRate).toBe(1.5)
+
+        // Playing second pauses first automatically
+        fireEvent.click(screen.getByRole('button', { name: 'Play voice message' }))
+        await waitFor(() => {
+          expect(audioInstances[0].paused).toBe(true)
+          expect(audioInstances[1].paused).toBe(false)
+        })
+      } finally {
+        globalThis.Audio = origAudio
+      }
     })
   })
 })

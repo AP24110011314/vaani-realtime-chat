@@ -1,0 +1,6 @@
+ALTER TABLE messages
+  MODIFY message_type ENUM('TEXT','IMAGE','FILE','SYSTEM','VOICE') NOT NULL DEFAULT 'TEXT';
+
+ALTER TABLE attachments
+  ADD COLUMN duration_ms INT NULL,
+  ADD COLUMN waveform VARBINARY(64) NULL;

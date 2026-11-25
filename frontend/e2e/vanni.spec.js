@@ -272,6 +272,19 @@ test.describe('Vanni Phase 9 E2E (Two Browsers, Realtime, Groups, Security, Mobi
     await squadRowB.click()
     await pageA.getByRole('button', { name: new RegExp(`E2E Squad ${ts}`) }).first().click()
 
+    // 6d. Phase 13 Voice Messages flow (Chrome fake audio stream): record ~1.6s, send, recipient plays & cycles speed
+    await pageA.getByRole('button', { name: 'Record voice message' }).click()
+    await expect(pageA.getByRole('region', { name: 'Voice message recorder' })).toBeVisible({ timeout: 5000 })
+    await pageA.waitForTimeout(1600)
+    await pageA.getByRole('button', { name: 'Send voice message' }).click()
+
+    await expect(pageA.getByRole('log').getByRole('button', { name: 'Play voice message' }).first()).toBeVisible({ timeout: 10000 })
+    const voicePlayBtnB = pageB.getByRole('log').getByRole('button', { name: 'Play voice message' }).first()
+    await expect(voicePlayBtnB).toBeVisible({ timeout: 10000 })
+    await voicePlayBtnB.click()
+    await pageB.getByRole('log').getByRole('button', { name: /Playback speed 1x/i }).first().click()
+    await expect(pageB.getByRole('log').getByRole('button', { name: /Playback speed 1\.5x/i }).first()).toBeVisible()
+
     // 7. Mobile 390px viewport check on Context B
     await pageB.setViewportSize({ width: 390, height: 844 })
     await expect(pageB.getByRole('button', { name: 'Back to conversations' })).toBeVisible()

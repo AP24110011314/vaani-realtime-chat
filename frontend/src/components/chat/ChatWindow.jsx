@@ -147,7 +147,14 @@ export default function ChatWindow({
   }, [conversationId, isLoadingOlder, hasOlder, mergedMessages])
 
   const executeSend = useCallback(
-    async ({ content, clientMessageId, attachmentIds = [], replyToId = null }) => {
+    async ({
+      content,
+      clientMessageId,
+      attachmentIds = [],
+      attachments = [],
+      replyToId = null,
+      type = null,
+    }) => {
       // Optimistic update
       queryClient.setQueryData(['messages', conversationId], (old = []) => {
         const existingIdx = old.findIndex(
@@ -163,7 +170,7 @@ export default function ChatWindow({
           replySnippet = {
             id: replyTo.id,
             senderName: replyTo.sender?.name || replyTo.senderName || '',
-            snippet: replyTo.snippet || replyTo.content || '',
+            snippet: replyTo.snippet || replyTo.previewText || replyTo.content || '',
           }
         }
 
@@ -171,10 +178,12 @@ export default function ChatWindow({
           id: null,
           conversationId: Number(conversationId),
           content: content ? content.trim() : null,
+          messageType: type || (attachments.length > 0 ? 'FILE' : 'TEXT'),
+          type: type || (attachments.length > 0 ? 'FILE' : 'TEXT'),
           clientMessageId,
           sender: { id: currentUserId },
           replyTo: replySnippet,
-          attachments: [],
+          attachments,
           reactions: [],
           isMine: true,
           pending: true,
@@ -206,6 +215,7 @@ export default function ChatWindow({
           clientMessageId,
           replyToId,
           attachmentIds,
+          ...(type ? { type } : {}),
         })
         if (published) {
           return
@@ -219,6 +229,7 @@ export default function ChatWindow({
           clientMessageId,
           replyToId,
           attachmentIds,
+          ...(type ? { type } : {}),
         })
         clearTimeout(timeoutId)
         pendingTimersRef.current.delete(clientMessageId)
@@ -250,14 +261,25 @@ export default function ChatWindow({
   const handleSendMessage = (contentOrPayload, attachmentIds = [], replyToId = null) => {
     let c = contentOrPayload
     let a = attachmentIds
+    let atts = []
     let r = replyToId
+    let t = null
     if (typeof contentOrPayload === 'object' && contentOrPayload !== null) {
       c = contentOrPayload.content
       a = contentOrPayload.attachmentIds || []
+      atts = contentOrPayload.attachments || []
       r = contentOrPayload.replyToId || null
+      t = contentOrPayload.type || null
     }
     const clientMessageId = crypto.randomUUID()
-    executeSend({ content: c, clientMessageId, attachmentIds: a, replyToId: r })
+    executeSend({
+      content: c,
+      clientMessageId,
+      attachmentIds: a,
+      attachments: atts,
+      replyToId: r,
+      type: t,
+    })
     setReplyTo(null)
   }
 
@@ -267,7 +289,9 @@ export default function ChatWindow({
       content: message.content,
       clientMessageId: message.clientMessageId,
       attachmentIds,
+      attachments: message.attachments || [],
       replyToId: message.replyTo?.id || null,
+      type: message.type || message.messageType || null,
     })
   }
 

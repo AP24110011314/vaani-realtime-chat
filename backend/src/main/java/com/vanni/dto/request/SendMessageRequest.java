@@ -1,5 +1,6 @@
 package com.vanni.dto.request;
 
+import com.vanni.entity.MessageType;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 
@@ -12,9 +13,15 @@ public record SendMessageRequest(
 
     Long replyToId,
 
-    List<Long> attachmentIds
+    List<Long> attachmentIds,
+
+    MessageType type
 ) {
     public SendMessageRequest(String content, String clientMessageId, Long replyToId) {
-        this(content, clientMessageId, replyToId, null);
+        this(content, clientMessageId, replyToId, null, null);
+    }
+
+    public SendMessageRequest(String content, String clientMessageId, Long replyToId, List<Long> attachmentIds) {
+        this(content, clientMessageId, replyToId, attachmentIds, null);
     }
 }
