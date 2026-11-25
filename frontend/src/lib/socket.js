@@ -2,15 +2,8 @@ import { Client } from '@stomp/stompjs'
 
 /**
  * Creates and configures a STOMP WebSocket client instance.
- *
- * @param {Object} options
- * @param {Function} options.onConnect - Called when connection is established
- * @param {Function} options.onEvent - Called when an event arrives on /user/queue/events
- * @param {Function} options.onStatus - Called on connection status change
- * @param {Function} options.onError - Called on STOMP error
- * @returns {Client}
  */
-export function createSocket({ onConnect, onEvent, onStatus, onError }) {
+export function createSocket({ onConnect, onEvent, onStatus, onError, beforeConnect }) {
   const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
   const wsPath = import.meta.env.VITE_WS_PATH || '/ws'
   const wsUrl = `${proto}://${window.location.host}${wsPath}`
@@ -20,6 +13,11 @@ export function createSocket({ onConnect, onEvent, onStatus, onError }) {
     reconnectDelay: 2000,
     heartbeatIncoming: 10000,
     heartbeatOutgoing: 10000,
+    beforeConnect: beforeConnect
+      ? async () => {
+          await beforeConnect()
+        }
+      : undefined,
     onConnect: () => {
       onStatus?.('connected')
       client.subscribe('/user/queue/events', (frame) => {

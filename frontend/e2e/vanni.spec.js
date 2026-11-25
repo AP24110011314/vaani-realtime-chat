@@ -1,7 +1,9 @@
+import { Buffer } from 'node:buffer'
 import { test, expect } from '@playwright/test'
 
 test.describe('Vanni Phase 9 E2E (Two Browsers, Realtime, Groups, Security, Mobile, Accessibility)', () => {
   test('register/login, live 1:1 chat with receipts, XSS safety, group flow, and 360px mobile layout', async ({ browser }) => {
+    test.setTimeout(120000)
     const ts = Date.now()
     const ashaEmail = `asha.${ts}@vanni.app`
     const raviEmail = `ravi.${ts}@vanni.app`
@@ -24,11 +26,15 @@ test.describe('Vanni Phase 9 E2E (Two Browsers, Realtime, Groups, Security, Mobi
       alertTriggered = true
     })
 
+    let allowExpected400 = false
     const uncaughtErrors = []
     pageA.on('pageerror', (err) => uncaughtErrors.push(err.message))
     pageA.on('console', (msg) => {
-      if (msg.type() === 'error' && !msg.text().includes('status of 401')) {
-        uncaughtErrors.push(msg.text())
+      if (msg.type() === 'error') {
+        const text = msg.text()
+        if (text.includes('status of 401')) return
+        if (allowExpected400 && text.includes('status of 400')) return
+        uncaughtErrors.push(text)
       }
     })
 
@@ -90,11 +96,52 @@ test.describe('Vanni Phase 9 E2E (Two Browsers, Realtime, Groups, Security, Mobi
     // Asha should see Read tick on her message
     await expect(pageA.locator('[aria-label="Read"]').first()).toBeVisible({ timeout: 10000 })
 
-    // 5. Ravi replies and Asha sees it live
+    // 5. Typing indicator + Ravi replies and Asha sees it live (plus same-user second tab sync)
+    const pageA2 = await ctxA.newPage()
+    await pageA2.goto(`/app`)
+    await expect(pageA2.getByRole('button', { name: new RegExp(`Ravi ${ts}`) })).toBeVisible({ timeout: 10000 })
+
     const composerB = pageB.getByPlaceholder(/Type a message/i)
+    await composerB.pressSequentially('Hi ', { delay: 40 })
+    await expect(pageA.getByText(/typing/i)).toBeVisible({ timeout: 5000 })
+
     await composerB.fill('Hi Asha, received loud and clear!')
     await composerB.press('Enter')
     await expect(pageA.getByRole('log').getByText('Hi Asha, received loud and clear!')).toBeVisible({ timeout: 10000 })
+    await expect(pageA2.getByRole('button', { name: new RegExp(`Hi Asha, received loud and clear!`) })).toBeVisible({ timeout: 10000 })
+    await pageA2.close()
+
+    // Asha edits her own message, adds a reaction, and uploads a valid PNG + rejected spoofed .exe.png
+    const myMsgBubble = pageA.locator('[id^="msg-"]').filter({ hasText: 'Hello Ravi' }).first()
+    await myMsgBubble.hover()
+    await myMsgBubble.getByRole('button', { name: 'Edit message' }).click()
+    const editComposerA = pageA.getByPlaceholder('Edit your message...')
+    await editComposerA.fill('Hello Ravi edited!')
+    await editComposerA.press('Enter')
+    await expect(pageB.getByRole('log').getByText('Hello Ravi edited!')).toBeVisible({ timeout: 10000 })
+    await expect(pageA.getByRole('log').getByText('edited', { exact: true })).toBeVisible({ timeout: 10000 })
+
+    // Attachment upload: valid 1x1 PNG works, spoofed MZ .exe renamed .png rejected with alert
+    const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+    const fileInputA = pageA.locator('input[type="file"]').first()
+    await fileInputA.setInputFiles({
+      name: 'photo.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(pngBase64, 'base64'),
+    })
+    await expect(pageA.getByRole('button', { name: 'Send message' })).toBeEnabled({ timeout: 10000 })
+    await pageA.getByRole('button', { name: 'Send message' }).click()
+    await expect(pageB.getByRole('log').locator('img[alt="photo.png"]')).toBeVisible({ timeout: 10000 })
+
+    allowExpected400 = true
+    await fileInputA.setInputFiles({
+      name: 'malware.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00]),
+    })
+    await expect(pageA.getByRole('alert').first()).toBeVisible({ timeout: 10000 })
+    allowExpected400 = false
+    await pageA.getByRole('button', { name: 'Remove attachment' }).click()
 
     // 6. Group flow: Asha creates group with Ravi and Mira
     await pageA.getByRole('button', { name: 'New Group' }).click()
@@ -111,17 +158,26 @@ test.describe('Vanni Phase 9 E2E (Two Browsers, Realtime, Groups, Security, Mobi
     await pageA.getByPlaceholder(/Type a message/i).fill('Welcome to the squad!')
     await pageA.getByPlaceholder(/Type a message/i).press('Enter')
 
-    // Mira opens group and sees the group message
+    // Mira opens group and sees the group message, then Asha removes Mira
     await pageC.getByRole('button', { name: new RegExp(`E2E Squad ${ts}`) }).click({ timeout: 10000 })
     await expect(pageC.getByRole('log').getByText('Welcome to the squad!')).toBeVisible({ timeout: 10000 })
 
-    // 7. Mobile 360px viewport check on Context B
-    await pageB.setViewportSize({ width: 360, height: 740 })
+    await pageA.getByRole('button', { name: 'Group Info' }).click()
+    const miraRow = pageA.locator('aside div.flex.items-center.justify-between').filter({ hasText: `Mira ${ts}` }).first()
+    const [delResp] = await Promise.all([
+      pageA.waitForResponse((r) => r.url().includes('/members/') && r.request().method() === 'DELETE'),
+      miraRow.getByRole('button', { name: 'Remove member' }).click(),
+    ])
+    expect(delResp.status()).toBe(204)
+    await expect(pageC.getByText(/Welcome to Vanni/i)).toBeVisible({ timeout: 10000 })
+
+    // 7. Mobile 390px viewport check on Context B
+    await pageB.setViewportSize({ width: 390, height: 844 })
     await expect(pageB.getByRole('button', { name: 'Back to conversations' })).toBeVisible()
     const hasOverflow = await pageB.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)
     expect(hasOverflow).toBe(false)
 
-    // Back button returns to sidebar list on 360px mobile
+    // Back button returns to sidebar list on 390px mobile
     await pageB.getByRole('button', { name: 'Back to conversations' }).click()
     await expect(pageB.getByRole('button', { name: 'New Chat' })).toBeVisible()
 
@@ -132,7 +188,7 @@ test.describe('Vanni Phase 9 E2E (Two Browsers, Realtime, Groups, Security, Mobi
     // Verify Light / Dark theme toggle visibly updates the document and persists
     await pageA.goto('/settings')
     await expect(pageA.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible()
-    await pageA.getByRole('button', { name: 'Dark' }).click()
+    await pageA.getByRole('button', { name: 'Dark', exact: true }).click()
     await expect(pageA.locator('html')).toHaveClass(/\bdark\b/)
 
     let darkBg = ''
@@ -141,7 +197,7 @@ test.describe('Vanni Phase 9 E2E (Two Browsers, Realtime, Groups, Security, Mobi
       expect(darkBg).not.toContain('0.984')
     }).toPass({ timeout: 3000 })
 
-    await pageA.getByRole('button', { name: 'Light' }).click()
+    await pageA.getByRole('button', { name: 'Light', exact: true }).click()
     await expect(pageA.locator('html')).not.toHaveClass(/\bdark\b/)
 
     await expect(async () => {

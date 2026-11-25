@@ -61,16 +61,10 @@ public class ReceiptService {
             return;
         }
 
+        Instant now = Instant.now();
         for (Message msg : targetMessages) {
-            Optional<MessageReceipt> opt = messageReceiptRepository.findByMessageIdAndUserId(msg.getId(), userId);
-            if (opt.isEmpty()) {
-                MessageReceipt receipt = MessageReceipt.builder()
-                    .message(msg)
-                    .user(recipient)
-                    .status(ReceiptStatus.DELIVERED)
-                    .build();
-                messageReceiptRepository.save(receipt);
-
+            int inserted = messageReceiptRepository.insertIgnoreReceipt(msg.getId(), userId, ReceiptStatus.DELIVERED.name(), now);
+            if (inserted > 0) {
                 eventPublisher.sendToUser(
                     msg.getSender().getId(),
                     "receipt.updated",
@@ -108,26 +102,31 @@ public class ReceiptService {
             "unreadCount", unreadCount
         ));
 
-        // Upsert READ receipts for unread messages sent by others
-        List<Message> targetMessages = messageRepository.findUpToMessage(conversationId, upToMessageId, userId);
+        // Upsert READ receipts for unread messages sent by others (sorted + pre-checked to avoid S-to-X deadlocks)
+        Instant now = Instant.now();
+        List<Message> targetMessages = messageRepository.findUpToMessage(conversationId, upToMessageId, userId)
+            .stream()
+            .sorted(Comparator.comparing(Message::getId))
+            .toList();
+        if (targetMessages.isEmpty()) {
+            return;
+        }
+        List<Long> targetIds = targetMessages.stream().map(Message::getId).toList();
+        Map<Long, ReceiptStatus> existingStatusByMsg = messageReceiptRepository.findByUserIdAndMessageIds(userId, targetIds)
+            .stream()
+            .collect(Collectors.toMap(r -> r.getMessage().getId(), MessageReceipt::getStatus, (a, b) -> a));
+
         for (Message msg : targetMessages) {
-            Optional<MessageReceipt> opt = messageReceiptRepository.findByMessageIdAndUserId(msg.getId(), userId);
-            boolean transitionedToRead = false;
-            if (opt.isEmpty()) {
-                MessageReceipt receipt = MessageReceipt.builder()
-                    .message(msg)
-                    .user(reader)
-                    .status(ReceiptStatus.READ)
-                    .build();
-                messageReceiptRepository.save(receipt);
-                transitionedToRead = true;
+            ReceiptStatus existing = existingStatusByMsg.get(msg.getId());
+            if (existing == ReceiptStatus.READ) {
+                continue;
+            }
+            boolean transitionedToRead;
+            if (existing == ReceiptStatus.DELIVERED) {
+                transitionedToRead = messageReceiptRepository.upgradeToRead(msg.getId(), userId, now) > 0;
             } else {
-                MessageReceipt receipt = opt.get();
-                if (receipt.getStatus() != ReceiptStatus.READ) {
-                    receipt.setStatus(ReceiptStatus.READ);
-                    messageReceiptRepository.save(receipt);
-                    transitionedToRead = true;
-                }
+                int inserted = messageReceiptRepository.insertIgnoreReceipt(msg.getId(), userId, ReceiptStatus.READ.name(), now);
+                transitionedToRead = inserted > 0 || messageReceiptRepository.upgradeToRead(msg.getId(), userId, now) > 0;
             }
 
             // Respect show_read_receipts privacy:
@@ -156,22 +155,19 @@ public class ReceiptService {
         if (recipient == null) return;
 
         List<ConversationMember> activeMemberships = conversationMemberRepository.findByUserIdAndLeftAtIsNull(userId);
+        Instant now = Instant.now();
         for (ConversationMember cm : activeMemberships) {
             Long convId = cm.getConversation().getId();
             List<Message> pending = messageRepository.findMessagesWithoutReceiptFromUser(convId, userId);
             for (Message msg : pending) {
-                MessageReceipt receipt = MessageReceipt.builder()
-                    .message(msg)
-                    .user(recipient)
-                    .status(ReceiptStatus.DELIVERED)
-                    .build();
-                messageReceiptRepository.save(receipt);
-
-                eventPublisher.sendToUser(
-                    msg.getSender().getId(),
-                    "receipt.updated",
-                    new ReceiptUpdatedDto(convId, msg.getId(), userId, "DELIVERED")
-                );
+                int inserted = messageReceiptRepository.insertIgnoreReceipt(msg.getId(), userId, ReceiptStatus.DELIVERED.name(), now);
+                if (inserted > 0) {
+                    eventPublisher.sendToUser(
+                        msg.getSender().getId(),
+                        "receipt.updated",
+                        new ReceiptUpdatedDto(convId, msg.getId(), userId, "DELIVERED")
+                    );
+                }
             }
         }
     }

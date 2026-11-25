@@ -41,6 +41,7 @@ export default function MessageList({
   onRetryMessage,
   onShowReceipts,
   onNearBottom,
+  onBottomStateChange,
   onReply,
   onEdit,
   onDelete,
@@ -51,7 +52,7 @@ export default function MessageList({
   const containerRef = useRef(null)
   const previousScrollHeightRef = useRef(0)
   const isInitialLoadRef = useRef(true)
-  const prevMessagesLengthRef = useRef(messages.length)
+  const prevLastMessageKeyRef = useRef(null)
   const [showScrollBottomPill, setShowScrollBottomPill] = useState(false)
   const currentHighlightRef = useRef(null)
   const highlightTimerRef = useRef(null)
@@ -76,10 +77,13 @@ export default function MessageList({
       if (containerRef.current) {
         containerRef.current.scrollTop = containerRef.current.scrollHeight
       }
+      const last = messages[messages.length - 1]
+      prevLastMessageKeyRef.current = last ? last.id || last.clientMessageId : null
       isInitialLoadRef.current = false
+      onBottomStateChange?.(true)
       onNearBottom?.()
     }
-  }, [messages.length, onNearBottom])
+  }, [messages, onNearBottom, onBottomStateChange])
 
   useLayoutEffect(() => {
     if (previousScrollHeightRef.current > 0 && containerRef.current) {
@@ -112,6 +116,7 @@ export default function MessageList({
     const isScrolledUp = scrollHeight - scrollTop - clientHeight > 150
 
     setShowScrollBottomPill(isScrolledUp)
+    onBottomStateChange?.(isNearBottom)
 
     if (isNearBottom) {
       onNearBottom?.()
@@ -147,24 +152,26 @@ export default function MessageList({
   }, [])
 
   useEffect(() => {
-    if (messages.length > prevMessagesLengthRef.current) {
-      if (containerRef.current) {
-        const { scrollTop, scrollHeight, clientHeight } = containerRef.current
-        const isNearBottom = scrollHeight - scrollTop - clientHeight < 100
-        const lastMsg = messages[messages.length - 1]
-        const isMine = lastMsg?.sender?.id === currentUserId || lastMsg?.pending
+    const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null
+    const lastKey = lastMsg ? lastMsg.id || lastMsg.clientMessageId : null
+    const appendedAtBottom = Boolean(lastKey && lastKey !== prevLastMessageKeyRef.current)
 
-        if (isNearBottom || isMine) {
-          containerRef.current.scrollTop = containerRef.current.scrollHeight
-          setShowScrollBottomPill(false)
-          onNearBottom?.()
-        } else {
-          setShowScrollBottomPill(true)
-        }
+    if (appendedAtBottom && containerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = containerRef.current
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100
+      const isMine = lastMsg?.sender?.id === currentUserId || lastMsg?.pending
+
+      if (isNearBottom || isMine) {
+        containerRef.current.scrollTop = containerRef.current.scrollHeight
+        setShowScrollBottomPill(false)
+        onBottomStateChange?.(true)
+        onNearBottom?.()
+      } else {
+        setShowScrollBottomPill(true)
       }
     }
-    prevMessagesLengthRef.current = messages.length
-  }, [messages, currentUserId, onNearBottom])
+    prevLastMessageKeyRef.current = lastKey
+  }, [messages, currentUserId, onNearBottom, onBottomStateChange])
 
   if (messages.length === 0) {
     return (

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { formatTime } from '../../lib/formatters'
 import {
@@ -72,12 +72,22 @@ export default function MessageBubble({
   const isRead = status === 'READ'
   const isDelivered = status === 'DELIVERED'
 
-  // Can edit if sent by me, not deleted, within 15 minutes
-  const [canEdit] = useState(() => {
-    if (!isMine || isDeleted || isPending || isFailed || !message.createdAt) return false
-    const ageMinutes = (Date.now() - new Date(message.createdAt).getTime()) / (1000 * 60)
-    return ageMinutes <= 15
-  })
+  // Recompute edit window continuously so newly confirmed messages can be edited immediately
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => {
+    if (!isMine || isDeleted || isPending || isFailed || !message.createdAt) return
+    const timer = setInterval(() => setNowMs(Date.now()), 30000)
+    return () => clearInterval(timer)
+  }, [isMine, isDeleted, isPending, isFailed, message.createdAt])
+
+  const canEdit = Boolean(
+    isMine &&
+      !isDeleted &&
+      !isPending &&
+      !isFailed &&
+      message.createdAt &&
+      (nowMs - new Date(message.createdAt).getTime()) / (1000 * 60) <= 15
+  )
 
   // Can delete if sent by me or caller is a group admin
   const canDelete = !isDeleted && !isPending && (isMine || (isGroup && isGroupAdmin))
@@ -297,10 +307,10 @@ export default function MessageBubble({
             <button
               onClick={() => onRetry?.(message)}
               className="flex items-center gap-0.5 text-[var(--danger-text)] font-semibold hover:underline cursor-pointer"
-              title="Failed to send. Click to retry."
+              title={message.error || 'Failed to send. Click to retry.'}
             >
               <AlertCircle className="w-3 h-3" />
-              <span>Retry</span>
+              <span>{message.error ? `Retry (${message.error})` : 'Retry'}</span>
             </button>
           )}
           {isMine && !isPending && !isFailed && (

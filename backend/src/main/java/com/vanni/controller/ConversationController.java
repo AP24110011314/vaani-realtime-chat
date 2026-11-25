@@ -134,7 +134,10 @@ public class ConversationController {
     }
 
     @GetMapping("/{id}/avatar")
-    public ResponseEntity<Resource> getAvatar(@PathVariable Long id) {
-        return conversationService.serveGroupAvatar(id);
+    public ResponseEntity<Resource> getAvatar(
+            @CurrentUser UserPrincipal principal,
+            @PathVariable Long id
+    ) {
+        return conversationService.serveGroupAvatar(id, principal.id());
     }
 }

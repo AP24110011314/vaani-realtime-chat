@@ -149,14 +149,15 @@ public class UserService {
 
     public UserSummaryResponse toUserSummary(User user, com.vanni.entity.MemberRole role, Long requesterId) {
         boolean isSelf = requesterId != null && requesterId.equals(user.getId());
-        boolean hidePresence = !isSelf && !user.isShowLastSeen();
+        boolean isBlocked = !isSelf && requesterId != null && blockRepository.isBlockedEitherWay(requesterId, user.getId());
+        boolean hidePresence = isBlocked || (!isSelf && !user.isShowLastSeen());
         boolean online = !hidePresence && presenceService.isOnline(user.getId());
-        Instant lastSeen = user.isShowLastSeen() ? user.getLastSeenAt() : null;
+        Instant lastSeen = !hidePresence ? user.getLastSeenAt() : null;
         return new UserSummaryResponse(
             user.getId(),
             user.getName(),
             user.getAvatarUrl(),
-            user.getAbout(),
+            isBlocked ? null : user.getAbout(),
             online,
             lastSeen,
             role

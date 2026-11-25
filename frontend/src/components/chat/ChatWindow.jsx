@@ -19,7 +19,7 @@ export default function ChatWindow({
   onOpenNewGroup,
 }) {
   const queryClient = useQueryClient()
-  const { isConnected, sendMessage, setActiveConversationId, removedEvent, sendRead } = useSocket()
+  const { isConnected, sendMessage, setActiveConversationId, setIsChatAtBottom, removedEvent, sendRead } = useSocket()
   const { typingText, handleKeyStroke, handleStopTyping } = useTyping(conversationId)
   const [olderMessages, setOlderMessages] = useState([])
   const [hasOlder, setHasOlder] = useState(true)
@@ -35,6 +35,8 @@ export default function ChatWindow({
   // Reset local state if active conversation changes
   if (conversationId !== prevConversationId) {
     setPrevConversationId(conversationId)
+    setOlderMessages([])
+    setHasOlder(true)
     setShowGroupInfo(false)
     setReplyTo(null)
     setEditingMessage(null)
@@ -44,11 +46,13 @@ export default function ChatWindow({
   // Register active conversation with socket for events & catch-up
   useEffect(() => {
     setActiveConversationId(conversationId || null)
-    if (conversationId && typeof document !== 'undefined' && document.visibilityState === 'visible') {
+    setIsChatAtBottom?.(true)
+    const isFocused = typeof document !== 'undefined' && (typeof document.hasFocus !== 'function' || document.hasFocus())
+    if (conversationId && typeof document !== 'undefined' && document.visibilityState === 'visible' && isFocused) {
       sendRead?.(conversationId)
     }
     return () => setActiveConversationId(null)
-  }, [conversationId, setActiveConversationId, sendRead])
+  }, [conversationId, setActiveConversationId, setIsChatAtBottom, sendRead])
 
   // Handle immediate removal from active conversation
   useEffect(() => {
@@ -370,14 +374,20 @@ export default function ChatWindow({
       {/* Main Chat Glass Card */}
       <div className="flex-1 flex flex-col h-full min-w-0 rounded-[24px] md:rounded-[28px] glass overflow-hidden">
         <ChatHeader
+          key={`header-${conversationId}`}
           conversation={conversation}
           onBack={onBack}
           currentUserId={currentUserId}
           onToggleInfo={() => setShowGroupInfo((prev) => !prev)}
+          onBlockChange={() => {
+            queryClient.invalidateQueries({ queryKey: ['conversations'] })
+            queryClient.invalidateQueries({ queryKey: ['conversation', conversationId] })
+          }}
           typingText={typingText}
           onSelectSearchMatch={(msgId) => setHighlightedMessageId(msgId)}
         />
         <MessageList
+          key={`list-${conversationId}`}
           messages={mergedMessages}
           currentUserId={currentUserId}
           isGroup={conversation?.type === 'GROUP'}
@@ -394,13 +404,16 @@ export default function ChatWindow({
           onToggleReaction={handleToggleReaction}
           onSendQuickReply={(text) => handleSendMessage(text)}
           highlightedMessageId={highlightedMessageId}
+          onBottomStateChange={setIsChatAtBottom}
           onNearBottom={() => {
-            if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+            const isFocused = typeof document !== 'undefined' && (typeof document.hasFocus !== 'function' || document.hasFocus())
+            if (typeof document !== 'undefined' && document.visibilityState === 'visible' && isFocused) {
               sendRead?.(conversationId)
             }
           }}
         />
         <MessageComposer
+          key={`composer-${conversationId}`}
           onSendMessage={handleSendMessage}
           onKeyStroke={handleKeyStroke}
           onStopTyping={handleStopTyping}

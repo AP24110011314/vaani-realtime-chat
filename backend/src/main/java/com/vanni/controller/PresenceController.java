@@ -1,9 +1,10 @@
 package com.vanni.controller;
 
 import com.vanni.dto.response.PresenceDto;
+import com.vanni.security.CurrentUser;
+import com.vanni.security.UserPrincipal;
 import com.vanni.service.PresenceService;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -25,10 +26,11 @@ public class PresenceController {
     @GetMapping
     public ResponseEntity<List<PresenceDto>> getPresence(
             @RequestParam(value = "userIds", required = false) List<Long> userIds,
-            @AuthenticationPrincipal Long currentUserId) {
+            @CurrentUser UserPrincipal principal) {
         if (userIds == null || userIds.isEmpty()) {
             return ResponseEntity.ok(Collections.emptyList());
         }
+        Long currentUserId = principal != null ? principal.id() : null;
         List<PresenceDto> list = presenceService.getPresence(userIds, currentUserId);
         return ResponseEntity.ok(list);
     }

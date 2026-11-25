@@ -71,6 +71,10 @@ class SecurityChecklistIntegrationTest {
     private ConversationService conversationService;
     @Autowired
     private MessageService messageService;
+    @Autowired
+    private com.vanni.service.PresenceService presenceService;
+    @Autowired
+    private com.vanni.service.ReceiptService receiptService;
 
     private final ObjectMapper objectMapper = new JsonMapper();
 
@@ -298,16 +302,103 @@ class SecurityChecklistIntegrationTest {
 
     @Test
     void blockedUser_cannotSeePresenceOrSearchOrDirectChat() throws Exception {
-        mockMvc.perform(post("/api/users/" + bob.getId() + "/block")
+        presenceService.onSessionConnected("sec-presence-alice", alice.getId());
+        try {
+            mockMvc.perform(post("/api/users/" + bob.getId() + "/block")
+                    .with(csrf()).cookie(aliceCookie))
+                .andExpect(status().isNoContent());
+
+            // Alice herself sees online=true
+            mockMvc.perform(get("/api/presence")
+                    .cookie(aliceCookie)
+                    .param("userIds", alice.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].online").value(true));
+
+            // Presence masked for blocked user even while Alice is connected
+            mockMvc.perform(get("/api/presence")
+                    .cookie(bobCookie)
+                    .param("userIds", alice.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].online").value(false))
+                .andExpect(jsonPath("$[0].lastSeenAt").doesNotExist());
+        } finally {
+            presenceService.onSessionDisconnected("sec-presence-alice");
+        }
+    }
+
+    @Test
+    void idor_outsiderCannotDownloadGroupAvatar() throws Exception {
+        ConversationDto group = conversationService.createGroup(
+            alice.getId(),
+            new com.vanni.dto.request.CreateGroupRequest("Avatar Group", null, List.of(bob.getId(), outsider.getId()))
+        );
+        byte[] validPngHeader = new byte[]{
+            (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+            0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+            0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, (byte) 0xC4, (byte) 0x89,
+            0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54,
+            0x78, (byte) 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01,
+            0x0D, 0x0A, 0x2D, (byte) 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44,
+            (byte) 0xAE, 0x42, 0x60, (byte) 0x82
+        };
+        MockMultipartFile avatarFile = new MockMultipartFile("file", "grp.png", "image/png", validPngHeader);
+        mockMvc.perform(multipart("/api/conversations/" + group.id() + "/avatar")
+                .file(avatarFile).with(csrf()).cookie(aliceCookie))
+            .andExpect(status().isOk());
+
+        // Member can download group avatar
+        mockMvc.perform(get("/api/conversations/" + group.id() + "/avatar").cookie(bobCookie))
+            .andExpect(status().isOk());
+
+        // Remove outsider, then verify outsider gets 404 (cannot download group avatar)
+        mockMvc.perform(delete("/api/conversations/" + group.id() + "/members/" + outsider.getId())
                 .with(csrf()).cookie(aliceCookie))
             .andExpect(status().isNoContent());
 
-        // Presence masked for blocked user
-        mockMvc.perform(get("/api/presence")
-                .cookie(bobCookie)
-                .param("userIds", alice.getId().toString()))
+        mockMvc.perform(get("/api/conversations/" + group.id() + "/avatar").cookie(outsiderCookie))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void receipts_idempotentUnderRepeatedDeliveryAndRead() {
+        ConversationDto conv = conversationService.getOrCreateDirect(alice.getId(), bob.getId());
+        MessageDto msg = messageService.send(conv.id(), alice.getId(), new SendMessageRequest("Receipt test", "r1", null));
+
+        receiptService.markPendingDeliveredForUser(bob.getId());
+        receiptService.markPendingDeliveredForUser(bob.getId());
+        receiptService.markRead(bob.getId(), conv.id(), msg.id());
+        receiptService.markRead(bob.getId(), conv.id(), msg.id());
+    }
+
+    @Test
+    void auth_expiredAccessTokenRefreshedViaRefreshCookie() throws Exception {
+        var loginRes = mockMvc.perform(post("/api/auth/login")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"alice.sec@vanni.app\",\"password\":\"Password123\"}"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$[0].online").value(false))
-            .andExpect(jsonPath("$[0].lastSeenAt").doesNotExist());
+            .andReturn();
+
+        Cookie rtCookie = loginRes.getResponse().getCookie("vanni_rt");
+        assertThat(rtCookie).isNotNull();
+
+        JwtService expiredService = new JwtService("change-me-to-a-64-char-random-string-that-is-at-least-256-bits-long-vanni", -5);
+        Cookie expiredAt = new Cookie("vanni_at", expiredService.generateAccessToken(alice.getId(), alice.getEmail(), alice.getName()));
+
+        mockMvc.perform(get("/api/users/me").cookie(expiredAt))
+            .andExpect(status().isUnauthorized());
+
+        var refreshRes = mockMvc.perform(post("/api/auth/refresh").with(csrf()).cookie(expiredAt, rtCookie))
+            .andExpect(status().isOk())
+            .andReturn();
+
+        Cookie freshAt = refreshRes.getResponse().getCookie("vanni_at");
+        assertThat(freshAt).isNotNull();
+
+        mockMvc.perform(get("/api/users/me").cookie(freshAt))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.email").value("alice.sec@vanni.app"));
     }
 }

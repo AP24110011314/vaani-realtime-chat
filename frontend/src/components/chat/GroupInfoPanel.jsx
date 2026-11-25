@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { X, Users, Shield, UserMinus, UserPlus, LogOut, Edit2, Check, Loader2, Search } from 'lucide-react'
+import { X, Users, Shield, UserMinus, UserPlus, LogOut, Edit2, Check, Loader2, Search, Camera } from 'lucide-react'
 import { conversationApi } from '../../api/conversationApi'
 import { userApi } from '../../api/userApi'
 import { usePresence } from '../../hooks/usePresence'
@@ -19,6 +19,29 @@ export default function GroupInfoPanel({ conversation, currentUserId, onClose, o
   const [isSearchingUsers, setIsSearchingUsers] = useState(false)
   const [actionError, setActionError] = useState(null)
   const [isLeaving, setIsLeaving] = useState(false)
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+  const avatarInputRef = useRef(null)
+
+  const handleGroupAvatarSelect = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setActionError(null)
+    if (file.size > 2 * 1024 * 1024) {
+      setActionError('Group avatar must be 2 MB or smaller.')
+      return
+    }
+    setIsUploadingAvatar(true)
+    try {
+      await conversationApi.uploadAvatar(conversation.id, file)
+      queryClient.invalidateQueries({ queryKey: ['conversation', String(conversation.id)] })
+      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+    } catch (err) {
+      setActionError(err.response?.data?.message || 'Failed to upload group avatar')
+    } finally {
+      setIsUploadingAvatar(false)
+      if (avatarInputRef.current) avatarInputRef.current.value = ''
+    }
+  }
 
   const isAdmin = conversation.myRole === 'ADMIN'
   const members = conversation.members || []
@@ -144,8 +167,44 @@ export default function GroupInfoPanel({ conversation, currentUserId, onClose, o
 
         {/* Group Header Info */}
         <div className="flex flex-col items-center text-center p-4 rounded-2xl glass-subtle">
-          <div className="w-14 h-14 rounded-full accent-badge flex items-center justify-center text-xl font-bold shadow-md mb-2.5">
-            {conversation.title ? conversation.title.charAt(0).toUpperCase() : <Users className="w-7 h-7" />}
+          <div className="relative mb-2.5">
+            {conversation.avatarUrl ? (
+              <img
+                src={conversation.avatarUrl}
+                alt={conversation.title}
+                className="w-16 h-16 rounded-full object-cover shadow-md border border-[var(--glass-border)]"
+              />
+            ) : (
+              <div className="w-16 h-16 rounded-full accent-badge flex items-center justify-center text-xl font-bold shadow-md">
+                {conversation.title ? conversation.title.charAt(0).toUpperCase() : <Users className="w-7 h-7" />}
+              </div>
+            )}
+
+            {isAdmin && (
+              <>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={handleGroupAvatarSelect}
+                />
+                <button
+                  type="button"
+                  disabled={isUploadingAvatar}
+                  onClick={() => avatarInputRef.current?.click()}
+                  className="absolute -bottom-1 -right-1 p-1.5 rounded-full glass-strong text-ink hover:text-accent-text transition-colors shadow-sm cursor-pointer focus-accent"
+                  title="Change group avatar"
+                  aria-label="Change group avatar"
+                >
+                  {isUploadingAvatar ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Camera className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </>
+            )}
           </div>
 
           {!isEditingTitle ? (

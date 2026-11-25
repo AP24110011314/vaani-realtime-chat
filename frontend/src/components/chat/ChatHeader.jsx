@@ -8,10 +8,13 @@ import {
   ChevronUp,
   ChevronDown,
   Loader2,
+  Ban,
+  UserCheck,
 } from 'lucide-react'
 import { usePresence } from '../../hooks/usePresence'
 import { formatLastSeen } from '../../lib/formatters'
 import { searchApi } from '../../api/searchApi'
+import { userApi } from '../../api/userApi'
 import UserAvatar from '../common/UserAvatar'
 
 export default function ChatHeader({
@@ -19,6 +22,7 @@ export default function ChatHeader({
   onBack,
   currentUserId,
   onToggleInfo,
+  onBlockChange,
   typingText,
   onSelectSearchMatch,
 }) {
@@ -30,6 +34,8 @@ export default function ChatHeader({
   const [searchResults, setSearchResults] = useState([])
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0)
   const [isSearchingLoading, setIsSearchingLoading] = useState(false)
+  const [isTogglingBlock, setIsTogglingBlock] = useState(false)
+  const [isPeerBlocked, setIsPeerBlocked] = useState(false)
   const searchInputRef = useRef(null)
 
   // Resolve peer if direct chat
@@ -183,10 +189,18 @@ export default function ChatHeader({
             </button>
 
             {/* Avatar with optional online indicator */}
-            {isGroup && !avatarUrl ? (
-              <div className="w-10 h-10 rounded-full accent-badge flex items-center justify-center shadow-inner flex-shrink-0">
-                <Users className="w-5 h-5" />
-              </div>
+            {isGroup ? (
+              avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt={title}
+                  className="w-10 h-10 rounded-full object-cover shadow-sm flex-shrink-0"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-full accent-badge flex items-center justify-center shadow-inner flex-shrink-0">
+                  <Users className="w-5 h-5" />
+                </div>
+              )
             ) : (
               <UserAvatar
                 src={avatarUrl}
@@ -239,6 +253,40 @@ export default function ChatHeader({
             >
               <Search className="w-4 h-4" />
             </button>
+
+            {!isGroup && peer?.id && (
+              <button
+                type="button"
+                disabled={isTogglingBlock}
+                onClick={async () => {
+                  setIsTogglingBlock(true)
+                  try {
+                    if (isPeerBlocked) {
+                      await userApi.unblock(peer.id)
+                      setIsPeerBlocked(false)
+                      onBlockChange?.(false)
+                    } else {
+                      await userApi.block(peer.id)
+                      setIsPeerBlocked(true)
+                      onBlockChange?.(true)
+                    }
+                  } catch {
+                    // Ignore error
+                  } finally {
+                    setIsTogglingBlock(false)
+                  }
+                }}
+                className={`p-1.5 rounded-xl transition-all active:scale-95 focus-accent cursor-pointer disabled:opacity-50 ${
+                  isPeerBlocked
+                    ? 'text-[var(--success-text)] hover:bg-[var(--success-bg)]'
+                    : 'text-ink-muted hover:text-[var(--danger-text)] hover:bg-[var(--danger-bg)]'
+                }`}
+                title={isPeerBlocked ? 'Unblock user' : 'Block user'}
+                aria-label={isPeerBlocked ? 'Unblock user' : 'Block user'}
+              >
+                {isPeerBlocked ? <UserCheck className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
+              </button>
+            )}
 
             {isGroup && onToggleInfo && (
               <button

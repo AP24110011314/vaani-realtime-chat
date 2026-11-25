@@ -16,6 +16,7 @@ import { attachmentApi } from '../../api/attachmentApi'
 import { formatFileSize } from '../../lib/formatters'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
+const MAX_MESSAGE_LENGTH = 4000
 const BLOCKED_EXTENSIONS = new Set([
   'exe', 'sh', 'bat', 'cmd', 'js', 'html', 'htm', 'svg', 'vbs', 'jar', 'ps1', 'py', 'bin', 'msi', 'dll', 'so', 'dylib', 'com',
 ])
@@ -46,6 +47,7 @@ export default function MessageComposer({
   const textareaRef = useRef(null)
   const fileInputRef = useRef(null)
   const dragCounterRef = useRef(0)
+  const abortControllersRef = useRef(new Map())
 
   // Populate content if editing message
   const [prevEditingMessage, setPrevEditingMessage] = useState(editingMessage)
@@ -113,15 +115,22 @@ export default function MessageComposer({
       dto: null,
     }
 
+    const controller = new AbortController()
+    abortControllersRef.current.set(tempId, controller)
     setAttachments((prev) => [...prev, initialItem])
 
     try {
-      const dto = await attachmentApi.upload(file, (progress) => {
-        setAttachments((prev) =>
-          prev.map((item) => (item.tempId === tempId ? { ...item, progress } : item))
-        )
-      })
+      const dto = await attachmentApi.upload(
+        file,
+        (progress) => {
+          setAttachments((prev) =>
+            prev.map((item) => (item.tempId === tempId ? { ...item, progress } : item))
+          )
+        },
+        controller.signal
+      )
 
+      abortControllersRef.current.delete(tempId)
       setAttachments((prev) =>
         prev.map((item) =>
           item.tempId === tempId
@@ -130,7 +139,12 @@ export default function MessageComposer({
         )
       )
     } catch (err) {
+      abortControllersRef.current.delete(tempId)
+      if (err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError' || err?.name === 'AbortError') {
+        return
+      }
       const errorMsg = err.response?.data?.message || 'Failed to upload'
+      setComposerError(errorMsg)
       setAttachments((prev) =>
         prev.map((item) =>
           item.tempId === tempId
@@ -150,6 +164,11 @@ export default function MessageComposer({
   }
 
   const handleRemoveAttachment = (tempId) => {
+    const controller = abortControllersRef.current.get(tempId)
+    if (controller) {
+      controller.abort()
+      abortControllersRef.current.delete(tempId)
+    }
     setAttachments((prev) => {
       const item = prev.find((a) => a.tempId === tempId)
       if (item && item.previewUrl) {
@@ -180,6 +199,11 @@ export default function MessageComposer({
     const trimmed = content.trim()
     const uploadedDtos = attachments.map((a) => a.dto).filter(Boolean)
     const attachmentIds = uploadedDtos.map((d) => d.id)
+
+    if (trimmed.length > MAX_MESSAGE_LENGTH) {
+      setComposerError('Message exceeds the 4,000-character limit.')
+      return
+    }
 
     if (editingMessage) {
       if (trimmed) {
@@ -220,7 +244,11 @@ export default function MessageComposer({
   }
 
   const handleChange = (e) => {
-    setContent(e.target.value)
+    const val = e.target.value
+    setContent(val)
+    if (composerError && val.trim().length <= MAX_MESSAGE_LENGTH && composerError.includes('4,000-character')) {
+      setComposerError(null)
+    }
     if (!editingMessage) {
       onKeyStroke?.()
     }
@@ -483,6 +511,17 @@ export default function MessageComposer({
           disabled={disabled}
           className="flex-1 bg-transparent px-2 py-2 text-[15px] text-ink placeholder-[var(--text-muted-token)] focus:outline-none resize-none max-h-32 leading-snug"
         />
+
+        {/* Character counter near 4000 limit */}
+        {content.length >= 3500 && (
+          <span
+            className={`text-[10px] font-semibold tabular-nums px-1.5 flex-shrink-0 mb-2.5 ${
+              content.trim().length > MAX_MESSAGE_LENGTH ? 'text-[var(--danger-text)]' : 'text-ink-subtle'
+            }`}
+          >
+            {content.trim().length}/{MAX_MESSAGE_LENGTH}
+          </span>
+        )}
 
         {/* Circular Gradient Send Button */}
         <button

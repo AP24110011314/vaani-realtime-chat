@@ -1026,4 +1026,124 @@ describe('Phase 5 Groups, Presence & System Messages', () => {
       expect(localStorage.getItem('vanni_theme')).toBe('system')
     })
   })
+
+  describe('QA Regression Fixes', () => {
+    it('MessageComposer shows character counter near limit and rejects > 4000 chars', async () => {
+      const onSend = vi.fn()
+      render(<MessageComposer onSendMessage={onSend} />)
+
+      const textarea = screen.getByPlaceholderText(/Type a message/i)
+      const overLimit = 'a'.repeat(4005)
+      fireEvent.change(textarea, { target: { value: overLimit } })
+
+      expect(screen.getByText('4005/4000')).toBeInTheDocument()
+
+      fireEvent.keyDown(textarea, { key: 'Enter', code: 'Enter' })
+      expect(onSend).not.toHaveBeenCalled()
+      expect(screen.getByRole('alert')).toHaveTextContent(/4,000-character limit/i)
+    })
+
+    it('MessageBubble enables edit immediately when optimistic pending becomes false', () => {
+      const baseMsg = {
+        id: null,
+        clientMessageId: 'cm-qa-1',
+        content: 'Just sent',
+        sender: { id: 1, name: 'Asha' },
+        createdAt: new Date().toISOString(),
+        pending: true,
+        failed: false,
+      }
+
+      const { rerender } = render(
+        <MessageBubble message={baseMsg} isMine={true} onEdit={vi.fn()} />
+      )
+      expect(screen.queryByRole('button', { name: /Edit message/i })).not.toBeInTheDocument()
+
+      rerender(
+        <MessageBubble
+          message={{ ...baseMsg, id: 901, pending: false }}
+          isMine={true}
+          onEdit={vi.fn()}
+        />
+      )
+      expect(screen.getByRole('button', { name: /Edit message/i })).toBeInTheDocument()
+    })
+
+    it('MessageList does not jump scroll to bottom when older messages are prepended', () => {
+      const recent = [
+        { id: 10, content: 'Recent 1', sender: { id: 2, name: 'Ravi' }, createdAt: new Date().toISOString() },
+        { id: 11, content: 'My latest', sender: { id: 1, name: 'Asha' }, createdAt: new Date().toISOString() },
+      ]
+
+      const { rerender } = render(
+        <MessageList
+          messages={recent}
+          currentUserId={1}
+          onLoadOlder={vi.fn()}
+          hasOlder={true}
+          isLoadingOlder={false}
+        />
+      )
+
+      const logEl = screen.getByRole('log')
+      Object.defineProperty(logEl, 'scrollHeight', { value: 1200, configurable: true })
+      Object.defineProperty(logEl, 'clientHeight', { value: 400, configurable: true })
+      logEl.scrollTop = 250
+
+      const withOlder = [
+        { id: 8, content: 'Older 1', sender: { id: 2, name: 'Ravi' }, createdAt: new Date().toISOString() },
+        { id: 9, content: 'Older 2', sender: { id: 1, name: 'Asha' }, createdAt: new Date().toISOString() },
+        ...recent,
+      ]
+
+      rerender(
+        <MessageList
+          messages={withOlder}
+          currentUserId={1}
+          onLoadOlder={vi.fn()}
+          hasOlder={true}
+          isLoadingOlder={false}
+        />
+      )
+
+      // Must NOT snap to scrollHeight (1200) when prepending older messages
+      expect(logEl.scrollTop).toBe(250)
+    })
+
+    it('ChatHeader renders block toggle button in direct chats and GroupInfoPanel shows admin avatar upload', () => {
+      const { rerender } = render(
+        <ChatHeader
+          conversation={{
+            id: 55,
+            type: 'DIRECT',
+            title: 'Ravi',
+            members: [
+              { id: 1, name: 'Asha' },
+              { id: 2, name: 'Ravi', online: true },
+            ],
+          }}
+          currentUserId={1}
+          onBack={vi.fn()}
+        />
+      )
+      expect(screen.getByRole('button', { name: /Block user/i })).toBeInTheDocument()
+
+      rerender(
+        <QueryClientProvider client={new QueryClient()}>
+          <GroupInfoPanel
+            conversation={{
+              id: 77,
+              type: 'GROUP',
+              title: 'QA Team',
+              myRole: 'ADMIN',
+              members: [{ id: 1, name: 'Asha', role: 'ADMIN' }],
+            }}
+            currentUserId={1}
+            onClose={vi.fn()}
+          />
+        </QueryClientProvider>
+      )
+      expect(screen.getByRole('button', { name: /Change group avatar/i })).toBeInTheDocument()
+    })
+  })
 })

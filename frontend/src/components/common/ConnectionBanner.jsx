@@ -9,6 +9,7 @@ export default function ConnectionBanner() {
 
   useEffect(() => {
     const prev = prevStatusRef.current
+    prevStatusRef.current = status
     if ((prev === 'reconnecting' || prev === 'disconnected' || prev === 'offline') && status === 'connected') {
       setShowBackOnline(true)
       const timer = setTimeout(() => {
@@ -16,7 +17,6 @@ export default function ConnectionBanner() {
       }, 3000)
       return () => clearTimeout(timer)
     }
-    prevStatusRef.current = status
   }, [status])
 
   if (showBackOnline && status === 'connected') {

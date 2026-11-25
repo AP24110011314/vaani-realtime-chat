@@ -514,7 +514,8 @@ public class ConversationService {
     }
 
     @Transactional(readOnly = true)
-    public ResponseEntity<Resource> serveGroupAvatar(Long conversationId) {
+    public ResponseEntity<Resource> serveGroupAvatar(Long conversationId, Long userId) {
+        conversationAccessService.requireMember(conversationId, userId);
         Conversation conv = conversationRepository.findById(conversationId)
             .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "CONVERSATION_NOT_FOUND", "Conversation not found"));
 
@@ -572,7 +573,7 @@ public class ConversationService {
         MessageDto lastMessage = conv.getLastMessage() != null ? messageService.toDto(conv.getLastMessage()) : null;
 
         List<UserSummaryResponse> memberSummaries = members.stream()
-            .map(m -> userService.toUserSummary(m.getUser(), m.getRole()))
+            .map(m -> userService.toUserSummary(m.getUser(), m.getRole(), currentUserId))
             .toList();
 
         return new ConversationDto(

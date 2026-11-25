@@ -1,13 +1,37 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useInRouterContext, useNavigate } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
 import { createSocket } from '../lib/socket'
+import http from '../api/http'
 import { messageApi } from '../api/messageApi'
 import { presenceApi } from '../api/presenceApi'
 import { receiptApi } from '../api/receiptApi'
 import { showDesktopNotification } from '../lib/notifications'
 import ToastNotification from '../components/common/ToastNotification'
+
+function RouterToastNotification({ toast, onFallbackSelect, onDismiss }) {
+  const inRouter = useInRouterContext()
+  if (!inRouter) {
+    return <ToastNotification toast={toast} onSelect={onFallbackSelect} onDismiss={onDismiss} />
+  }
+  return <RoutedToast toast={toast} onFallbackSelect={onFallbackSelect} onDismiss={onDismiss} />
+}
+
+function RoutedToast({ toast, onFallbackSelect, onDismiss }) {
+  const navigate = useNavigate()
+  return (
+    <ToastNotification
+      toast={toast}
+      onSelect={(convId) => {
+        onFallbackSelect(convId)
+        navigate(`/app/c/${convId}`)
+      }}
+      onDismiss={onDismiss}
+    />
+  )
+}
 
 const defaultSocketContextValue = {
   status: 'disconnected',
@@ -22,6 +46,7 @@ const defaultSocketContextValue = {
   removedEvent: null,
   activeConversationId: null,
   setActiveConversationId: () => {},
+  setIsChatAtBottom: () => {},
   toast: null,
   dismissToast: () => {},
 }
@@ -40,9 +65,22 @@ export function SocketProvider({ children }) {
 
   const clientRef = useRef(null)
   const activeConversationRef = useRef(activeConversationId)
+  const isChatAtBottomRef = useRef(true)
   const hasEverConnectedRef = useRef(false)
+  const needsRefreshOnReconnectRef = useRef(false)
   const currentUserIdRef = useRef(user?.id)
   const toastTimerRef = useRef(null)
+
+  const setIsChatAtBottom = useCallback((atBottom) => {
+    isChatAtBottomRef.current = Boolean(atBottom)
+  }, [])
+
+  const isWindowFocusedAndVisible = useCallback(() => {
+    if (typeof document === 'undefined') return false
+    const visible = document.visibilityState === 'visible'
+    const focused = typeof document.hasFocus === 'function' ? document.hasFocus() : true
+    return visible && focused
+  }, [])
 
   const dismissToast = useCallback(() => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
@@ -122,12 +160,13 @@ export function SocketProvider({ children }) {
           const currentUserId = currentUserIdRef.current
           const isSender = data.sender?.id === currentUserId
           const isCurrentChatOpen = activeConversationRef.current === convId
-          const isTabVisible = typeof document !== 'undefined' && document.visibilityState === 'visible'
+          const isFocusedVisible = isWindowFocusedAndVisible()
+          const canReadNow = isCurrentChatOpen && isFocusedVisible && isChatAtBottomRef.current
 
           // Ack delivery for incoming messages
           if (!isSender && data.id) {
             sendDelivered(data.conversationId, [data.id])
-            if (isCurrentChatOpen && isTabVisible) {
+            if (canReadNow) {
               sendRead(data.conversationId, data.id)
             } else if (!isCurrentChatOpen) {
               triggerToast({
@@ -138,7 +177,7 @@ export function SocketProvider({ children }) {
               })
             }
 
-            // Desktop notification (only when tab hidden and chat unmuted)
+            // Desktop notification (only when tab hidden/unfocused and chat unmuted)
             const cachedConvs = queryClient.getQueryData(['conversations']) || []
             const targetConv = Array.isArray(cachedConvs) ? cachedConvs.find((c) => String(c.id) === convId) : null
             if (!targetConv?.muted) {
@@ -185,10 +224,11 @@ export function SocketProvider({ children }) {
 
             const isCurrentChatOpen = activeConversationRef.current === convId
             const isSender = data.sender?.id === currentUserId
+            const canReadNow = isCurrentChatOpen && isWindowFocusedAndVisible() && isChatAtBottomRef.current
 
             const updatedConvs = oldConvs.map((conv) => {
               if (conv.id === data.conversationId) {
-                const unreadDelta = !isCurrentChatOpen && !isSender ? 1 : 0
+                const unreadDelta = !canReadNow && !isSender ? 1 : 0
                 return {
                   ...conv,
                   lastMessage: {
@@ -430,7 +470,7 @@ export function SocketProvider({ children }) {
           break
       }
     },
-    [queryClient, sendDelivered, sendRead, triggerToast]
+    [queryClient, sendDelivered, sendRead, triggerToast, isWindowFocusedAndVisible]
   )
 
   // Handle reconnect catch-up for open conversation
@@ -490,8 +530,19 @@ export function SocketProvider({ children }) {
     })
 
     const client = createSocket({
+      beforeConnect: async () => {
+        if (needsRefreshOnReconnectRef.current) {
+          needsRefreshOnReconnectRef.current = false
+          try {
+            await http.post('/auth/refresh')
+          } catch {
+            // Refresh may fail if session expired cleanly; handshake will report 401
+          }
+        }
+      },
       onConnect: () => {
         setStatus('connected')
+        needsRefreshOnReconnectRef.current = false
         if (hasEverConnectedRef.current) {
           // Reconnection occurred!
           handleReconnectCatchUp()
@@ -499,6 +550,9 @@ export function SocketProvider({ children }) {
         hasEverConnectedRef.current = true
       },
       onStatus: (nextStatus) => {
+        if (nextStatus === 'reconnecting') {
+          needsRefreshOnReconnectRef.current = true
+        }
         if (typeof navigator !== 'undefined' && !navigator.onLine) {
           setStatus('offline')
         } else {
@@ -507,6 +561,7 @@ export function SocketProvider({ children }) {
       },
       onEvent: handleEvent,
       onError: (err) => {
+        needsRefreshOnReconnectRef.current = true
         console.warn('STOMP client error callback:', err)
       },
     })
@@ -629,7 +684,7 @@ export function SocketProvider({ children }) {
     })
 
     const handleFocusOrVisible = () => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible' && activeConversationRef.current) {
+      if (isWindowFocusedAndVisible() && activeConversationRef.current && isChatAtBottomRef.current) {
         sendRead(activeConversationRef.current)
       }
       updateTitle()
@@ -647,7 +702,7 @@ export function SocketProvider({ children }) {
         document.removeEventListener('visibilitychange', handleFocusOrVisible)
       }
     }
-  }, [queryClient, sendRead])
+  }, [queryClient, sendRead, isWindowFocusedAndVisible])
 
   const handleSelectToast = useCallback((convId) => {
     setActiveConversationId(convId)
@@ -667,6 +722,7 @@ export function SocketProvider({ children }) {
     removedEvent,
     activeConversationId,
     setActiveConversationId,
+    setIsChatAtBottom,
     toast,
     dismissToast,
   }
@@ -674,7 +730,7 @@ export function SocketProvider({ children }) {
   return (
     <SocketContext.Provider value={value}>
       {children}
-      <ToastNotification toast={toast} onSelect={handleSelectToast} onDismiss={dismissToast} />
+      <RouterToastNotification toast={toast} onFallbackSelect={handleSelectToast} onDismiss={dismissToast} />
     </SocketContext.Provider>
   )
 }

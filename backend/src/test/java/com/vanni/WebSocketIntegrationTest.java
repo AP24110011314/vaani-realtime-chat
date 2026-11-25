@@ -490,4 +490,29 @@ class WebSocketIntegrationTest {
         aliceSession.disconnect();
         bobSession.disconnect();
     }
+
+    @Test
+    void csrf_authenticatedRequestsPreserveXsrfCookie() throws Exception {
+        java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+        var csrfReq = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://localhost:" + port + "/api/auth/csrf"))
+            .GET()
+            .build();
+        var csrfRes = client.send(csrfReq, java.net.http.HttpResponse.BodyHandlers.discarding());
+        String xsrfSetCookie = csrfRes.headers().allValues("Set-Cookie").stream()
+            .filter(h -> h.startsWith("XSRF-TOKEN="))
+            .findFirst()
+            .orElse(null);
+        assertThat(xsrfSetCookie).isNotNull();
+        String tokenVal = xsrfSetCookie.split(";")[0].substring("XSRF-TOKEN=".length());
+
+        var authedGetReq = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://localhost:" + port + "/api/users/me"))
+            .header("Cookie", "vanni_at=" + aliceToken + "; XSRF-TOKEN=" + tokenVal)
+            .GET()
+            .build();
+        var authedGetRes = client.send(authedGetReq, java.net.http.HttpResponse.BodyHandlers.ofString());
+        assertThat(authedGetRes.statusCode()).isEqualTo(200);
+        boolean rotatedXsrf = authedGetRes.headers().allValues("Set-Cookie").stream()
+            .anyMatch(h -> h.startsWith("XSRF-TOKEN="));
+        assertThat(rotatedXsrf).isFalse();
+    }
 }

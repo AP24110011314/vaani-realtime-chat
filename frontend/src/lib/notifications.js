@@ -19,15 +19,17 @@ export function showDesktopNotification({ title, body, icon, onClick }) {
   if (Notification.permission !== 'granted') {
     return
   }
-  // Only show when the tab is hidden
-  if (typeof document !== 'undefined' && document.visibilityState !== 'hidden') {
+  // Only show when the tab is hidden or window is unfocused
+  const isVisible = typeof document !== 'undefined' && document.visibilityState === 'visible'
+  const isFocused = typeof document !== 'undefined' && typeof document.hasFocus === 'function' ? document.hasFocus() : true
+  if (isVisible && isFocused) {
     return
   }
 
   try {
     const notification = new Notification(title || 'Vanni', {
       body: body || '',
-      icon: icon || '/vite.svg',
+      icon: icon || '/favicon.svg',
     })
 
     notification.onclick = () => {
