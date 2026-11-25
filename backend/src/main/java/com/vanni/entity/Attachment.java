@@ -23,6 +23,10 @@ public class Attachment {
     private Message message;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "scheduled_message_id")
+    private ScheduledMessage scheduledMessage;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "uploader_id", nullable = false)
     private User uploader;
 

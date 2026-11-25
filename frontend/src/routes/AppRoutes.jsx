@@ -8,6 +8,7 @@ import AppShell from '../pages/AppShell'
 import JoinPage from '../pages/JoinPage'
 import ProfilePage from '../pages/ProfilePage'
 import SettingsPage from '../pages/SettingsPage'
+import ScheduledPage from '../pages/ScheduledPage'
 import NotFoundPage from '../pages/NotFoundPage'
 import ProtectedRoute from './ProtectedRoute'
 import PublicOnlyRoute from './PublicOnlyRoute'
@@ -33,6 +34,7 @@ export default function AppRoutes() {
         <Route path="/join/:code" element={<JoinPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/scheduled" element={<ScheduledPage />} />
       </Route>
 
       {/* 404 Fallback */}

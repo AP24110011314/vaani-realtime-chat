@@ -32,6 +32,10 @@ app:
   frontend-url: ${FRONTEND_URL:http://localhost:5173}
   link-previews:
     allow-localhost-for-tests: false
+  schedule:
+    min-lead-seconds: ${SCHEDULE_MIN_LEAD_SECONDS:60}
+    max-days: ${SCHEDULE_MAX_DAYS:365}
+    max-pending-per-user: ${SCHEDULE_MAX_PENDING_PER_USER:50}
 
 storage:
   provider: ${STORAGE_PROVIDER:local}

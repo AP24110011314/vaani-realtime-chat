@@ -13,6 +13,7 @@ import {
   Pencil,
   AtSign,
   Mic,
+  Clock,
 } from 'lucide-react'
 import { attachmentApi } from '../../api/attachmentApi'
 import { conversationApi } from '../../api/conversationApi'
@@ -20,6 +21,7 @@ import { formatFileSize } from '../../lib/formatters'
 import { isVoiceRecordingSupported } from '../../lib/voiceUtils'
 import MentionPicker from './MentionPicker'
 import VoiceRecorder from './VoiceRecorder'
+import ScheduleModal from './ScheduleModal'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 const MAX_MESSAGE_LENGTH = 4000
@@ -77,6 +79,7 @@ function encodeMentionsForWire(text, mentionMap, allowAll) {
 
 export default function MessageComposer({
   onSendMessage,
+  onScheduleMessage,
   onKeyStroke,
   onStopTyping,
   disabled,
@@ -93,6 +96,9 @@ export default function MessageComposer({
 }) {
   const [content, setContent] = useState('')
   const [attachments, setAttachments] = useState([]) // Array of { tempId, file, progress, error, dto }
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [isScheduling, setIsScheduling] = useState(false)
+  const [scheduleError, setScheduleError] = useState(null)
   const [isDragging, setIsDragging] = useState(false)
   const [composerError, setComposerError] = useState(null)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
@@ -409,6 +415,42 @@ export default function MessageComposer({
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
       textareaRef.current.focus()
+    }
+  }
+
+  const handleConfirmSchedule = async (scheduledForIso) => {
+    if (!onScheduleMessage) return
+    const trimmed = content.trim()
+    const wireContent = isGroup
+      ? encodeMentionsForWire(trimmed, selectedMentionsMap, isGroupAdmin)
+      : trimmed
+    const attachmentIds = attachments.map((a) => a.dto).filter(Boolean).map((d) => d.id)
+
+    if (!wireContent && attachmentIds.length === 0) return
+
+    setIsScheduling(true)
+    setScheduleError(null)
+    try {
+      await onScheduleMessage({
+        content: wireContent,
+        attachmentIds,
+        replyToId: replyTo?.id || null,
+        scheduledFor: scheduledForIso,
+      })
+      setShowScheduleModal(false)
+      setContent('')
+      setAttachments([])
+      setSelectedMentionsMap(new Map())
+      setMentionTrigger(null)
+      onStopTyping?.()
+      if (replyTo) onCancelReply?.()
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto'
+      }
+    } catch (err) {
+      setScheduleError(err.response?.data?.message || 'Could not schedule message.')
+    } finally {
+      setIsScheduling(false)
     }
   }
 
@@ -783,7 +825,7 @@ export default function MessageComposer({
           </span>
         )}
 
-        {/* Mic Button (when empty & supported) or Circular Gradient Send Button */}
+        {/* Mic Button (when empty & supported) or Schedule + Circular Gradient Send Button */}
         {showMicButton ? (
           <button
             type="button"
@@ -799,34 +841,61 @@ export default function MessageComposer({
             <Mic className="w-4 h-4" />
           </button>
         ) : (
-          <span
-            className="flex-shrink-0"
-            title={
-              !voiceSupported && content.length === 0 && attachments.length === 0
-                ? 'Voice recording is not supported in this browser'
-                : undefined
-            }
-          >
-            <button
-              type="button"
-              onClick={handleSend}
-              disabled={!canSend}
-              className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-150 focus-accent cursor-pointer ${
-                editingMessage
-                  ? 'bg-amber-500 hover:bg-amber-400 text-[#15151C] shadow-md scale-100'
-                  : canSend
-                  ? 'btn-accent scale-100 opacity-100'
-                  : 'glass-subtle text-ink-subtle opacity-45 scale-90 cursor-not-allowed'
-              }`}
-              aria-label={editingMessage ? 'Save edit' : 'Send message'}
-              title={editingMessage ? 'Save edit' : 'Send message'}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {!editingMessage && onScheduleMessage && canSend && (
+              <button
+                type="button"
+                onClick={() => {
+                  setScheduleError(null)
+                  setShowScheduleModal(true)
+                }}
+                className="w-9 h-9 rounded-full flex items-center justify-center glass-subtle hover:bg-[var(--glass-bg-hover)] text-ink-muted hover:text-accent-text transition-all focus-accent cursor-pointer"
+                aria-label="Schedule message"
+                title="Schedule message for later"
+              >
+                <Clock className="w-4 h-4" />
+              </button>
+            )}
+            <span
+              className="flex-shrink-0"
+              title={
+                !voiceSupported && content.length === 0 && attachments.length === 0
+                  ? 'Voice recording is not supported in this browser'
+                  : undefined
+              }
             >
-              <SendHorizonal className="w-4 h-4" />
-            </button>
-          </span>
+              <button
+                type="button"
+                onClick={handleSend}
+                disabled={!canSend}
+                className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-150 focus-accent cursor-pointer ${
+                  editingMessage
+                    ? 'bg-amber-500 hover:bg-amber-400 text-[#15151C] shadow-md scale-100'
+                    : canSend
+                    ? 'btn-accent scale-100 opacity-100'
+                    : 'glass-subtle text-ink-subtle opacity-45 scale-90 cursor-not-allowed'
+                }`}
+                aria-label={editingMessage ? 'Save edit' : 'Send message'}
+                title={editingMessage ? 'Save edit' : 'Send message'}
+              >
+                <SendHorizonal className="w-4 h-4" />
+              </button>
+            </span>
+          </div>
         )}
       </div>
       )}
+
+      <ScheduleModal
+        isOpen={showScheduleModal}
+        onClose={() => setShowScheduleModal(false)}
+        onConfirm={handleConfirmSchedule}
+        previewText={content.trim()}
+        attachmentCount={attachments.filter((a) => a.dto).length}
+        minLeadSeconds={5}
+        isSubmitting={isScheduling}
+        error={scheduleError}
+      />
     </div>
   )
 }

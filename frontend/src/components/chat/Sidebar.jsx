@@ -11,6 +11,7 @@ import {
   Loader2,
   SearchX,
   AtSign,
+  Clock,
 } from 'lucide-react'
 import ConversationList from './ConversationList'
 import UserSearchModal from './UserSearchModal'
@@ -157,6 +158,14 @@ export default function Sidebar({
             >
               <SquarePen className="w-4 h-4" />
             </button>
+            <Link
+              to="/scheduled"
+              className="p-1.5 text-ink-muted hover:text-ink hover:bg-[var(--glass-bg-hover)] rounded-xl transition-all active:scale-95 focus-accent"
+              title="Scheduled messages"
+              aria-label="Scheduled messages"
+            >
+              <Clock className="w-4 h-4" />
+            </Link>
             <Link
               to="/settings"
               className="p-1.5 text-ink-muted hover:text-ink hover:bg-[var(--glass-bg-hover)] rounded-xl transition-all active:scale-95 focus-accent"

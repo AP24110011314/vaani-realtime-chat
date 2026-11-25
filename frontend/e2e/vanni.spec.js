@@ -294,6 +294,63 @@ test.describe('Vanni Phase 9 E2E (Two Browsers, Realtime, Groups, Security, Mobi
     await pageA.waitForTimeout(500)
     await expect(pageA.getByRole('log').getByRole('img', { name: /Link preview image/i })).toHaveCount(0)
 
+    // 6f. Phase 15 Scheduled Messages: schedule via UI, manage/edit/send-now, plus due-time job auto-delivery
+    const convUrl = pageA.url()
+    const convIdMatch = convUrl.match(/\/app\/c\/(\d+)/)
+    const activeConvId = convIdMatch ? convIdMatch[1] : null
+    expect(activeConvId).toBeTruthy()
+
+    await pageA.getByPlaceholder(/@ to mention/i).fill('Draft to manage later')
+    await pageA.getByRole('button', { name: 'Schedule message' }).click()
+    await expect(pageA.getByRole('dialog', { name: 'Schedule message' })).toBeVisible()
+    await pageA.getByRole('dialog').getByRole('button', { name: /Tomorrow 9:00 AM/i }).click()
+    await pageA.getByRole('dialog').locator('button[type="submit"]').click()
+
+    await expect(pageA.getByText(/1 scheduled message/i)).toBeVisible({ timeout: 5000 })
+    await pageA.getByRole('link', { name: 'Manage' }).click()
+    await expect(pageA).toHaveURL(/\/scheduled/)
+    await expect(pageA.getByText('Draft to manage later')).toBeVisible({ timeout: 5000 })
+
+    await pageA.getByRole('button', { name: 'Edit' }).first().click()
+    await pageA.getByLabel('Edit scheduled message text').fill('Edited scheduled immediate')
+    await pageA.getByRole('button', { name: 'Save changes' }).click()
+    await expect(pageA.getByText('Edited scheduled immediate')).toBeVisible({ timeout: 5000 })
+
+    await pageA.getByRole('button', { name: 'Send now' }).first().click()
+    await expect(pageA.getByText(/No pending scheduled messages/i)).toBeVisible({ timeout: 5000 })
+
+    // Navigate back to the chat and confirm send-now delivered to both users
+    await pageA.getByRole('button', { name: 'Back to chats' }).click()
+    await expect(pageA.getByRole('log').getByText('Edited scheduled immediate')).toBeVisible({ timeout: 10000 })
+    await expect(pageB.getByRole('log').getByText('Edited scheduled immediate')).toBeVisible({ timeout: 10000 })
+
+    // Test background scheduler job delivery at due timestamp (+6s)
+    const dueIso = new Date(Date.now() + 6000).toISOString()
+    const schedRes = await pageA.evaluate(
+      async ({ convId, scheduledFor }) => {
+        const xsrf = document.cookie
+          .split('; ')
+          .find((c) => c.startsWith('XSRF-TOKEN='))
+          ?.split('=')[1]
+        const res = await fetch(`/api/conversations/${convId}/scheduled`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-XSRF-TOKEN': xsrf ? decodeURIComponent(xsrf) : '',
+          },
+          body: JSON.stringify({
+            content: 'Auto-delivered scheduled msg',
+            scheduledFor,
+          }),
+        })
+        return res.status
+      },
+      { convId: activeConvId, scheduledFor: dueIso }
+    )
+    expect(schedRes).toBe(201)
+    await expect(pageB.getByRole('log').getByText('Auto-delivered scheduled msg')).toBeVisible({ timeout: 15000 })
+    await expect(pageA.getByRole('log').getByText('Auto-delivered scheduled msg')).toHaveCount(1)
+
     // 7. Mobile 390px viewport check on Context B
     await pageB.setViewportSize({ width: 390, height: 844 })
     await expect(pageB.getByRole('button', { name: 'Back to conversations' })).toBeVisible()

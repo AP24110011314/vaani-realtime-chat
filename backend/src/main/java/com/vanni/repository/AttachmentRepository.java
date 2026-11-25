@@ -20,5 +20,10 @@ public interface AttachmentRepository extends JpaRepository<Attachment, Long> {
 
     Optional<Attachment> findByIdAndUploaderId(Long id, Long uploaderId);
 
-    List<Attachment> findByMessageIsNullAndCreatedAtBefore(Instant cutoff);
+    List<Attachment> findByMessageIsNullAndScheduledMessageIsNullAndCreatedAtBefore(Instant cutoff);
+
+    List<Attachment> findByScheduledMessageId(Long scheduledMessageId);
+
+    @Query("SELECT a FROM Attachment a WHERE a.scheduledMessage.id IN :scheduledIds")
+    List<Attachment> findByScheduledMessageIds(@Param("scheduledIds") List<Long> scheduledIds);
 }

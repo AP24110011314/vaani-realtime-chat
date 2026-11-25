@@ -1,9 +1,12 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { Link } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { conversationApi } from '../../api/conversationApi'
 import { inviteApi } from '../../api/inviteApi'
 import { messageApi } from '../../api/messageApi'
+import { scheduledApi } from '../../api/scheduledApi'
+import { formatScheduledTime } from '../../lib/scheduleUtils'
 import { useSocket } from '../../hooks/useSocket'
 import { useTyping } from '../../hooks/useTyping'
 import ChatHeader from './ChatHeader'
@@ -12,7 +15,7 @@ import MessageComposer from './MessageComposer'
 import GroupInfoPanel from './GroupInfoPanel'
 import MessageReceiptModal from './MessageReceiptModal'
 import UserAvatar from '../common/UserAvatar'
-import { ShieldAlert, SquarePen, Users, X } from 'lucide-react'
+import { Clock, ShieldAlert, SquarePen, Users, X } from 'lucide-react'
 
 export default function ChatWindow({
   conversationId,
@@ -90,6 +93,13 @@ export default function ChatWindow({
   const { data: latestMessages = [] } = useQuery({
     queryKey: ['messages', conversationId],
     queryFn: () => messageApi.list(conversationId, { size: 30 }),
+    enabled: Boolean(conversationId),
+  })
+
+  // Fetch pending scheduled messages for this conversation
+  const { data: pendingScheduled = [] } = useQuery({
+    queryKey: ['scheduled', 'PENDING', conversationId],
+    queryFn: () => scheduledApi.list({ status: 'PENDING', conversationId }),
     enabled: Boolean(conversationId),
   })
 
@@ -283,6 +293,23 @@ export default function ChatWindow({
     setReplyTo(null)
   }
 
+  const handleScheduleMessage = useCallback(
+    async ({ content, attachmentIds = [], replyToId = null, scheduledFor }) => {
+      const clientMessageId = crypto.randomUUID()
+      const created = await scheduledApi.create(conversationId, {
+        content,
+        attachmentIds,
+        replyToId,
+        scheduledFor,
+        clientMessageId,
+      })
+      queryClient.invalidateQueries({ queryKey: ['scheduled'] })
+      setReplyTo(null)
+      return created
+    },
+    [conversationId, queryClient]
+  )
+
   const handleRetryMessage = (message) => {
     const attachmentIds = message.attachments?.map((a) => a.id) || []
     executeSend({
@@ -470,9 +497,30 @@ export default function ChatWindow({
             }
           }}
         />
+        {pendingScheduled.length > 0 && (
+          <div className="mx-3 mb-1.5 px-3.5 py-2 rounded-2xl glass-subtle border border-[var(--accent-soft-border)] flex items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <Clock className="w-3.5 h-3.5 text-accent-text flex-shrink-0" />
+              <span className="font-semibold text-ink truncate">
+                {pendingScheduled.length} scheduled{' '}
+                {pendingScheduled.length === 1 ? 'message' : 'messages'}
+              </span>
+              <span className="hidden sm:inline text-ink-muted truncate">
+                · Next: {formatScheduledTime(pendingScheduled[0].scheduledFor)}
+              </span>
+            </div>
+            <Link
+              to={`/scheduled?conversationId=${conversationId}`}
+              className="text-xs font-semibold text-accent-text hover:underline flex-shrink-0 focus-accent rounded-md px-1"
+            >
+              Manage
+            </Link>
+          </div>
+        )}
         <MessageComposer
           key={`composer-${conversationId}`}
           onSendMessage={handleSendMessage}
+          onScheduleMessage={handleScheduleMessage}
           onKeyStroke={handleKeyStroke}
           onStopTyping={handleStopTyping}
           disabled={isLoadingConv || Boolean(convError)}

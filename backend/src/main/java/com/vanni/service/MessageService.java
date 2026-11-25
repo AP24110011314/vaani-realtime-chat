@@ -91,6 +91,14 @@ public class MessageService {
     }
 
     public MessageDto send(Long conversationId, Long senderId, SendMessageRequest req) {
+        return sendInternal(conversationId, senderId, req, null);
+    }
+
+    public MessageDto sendScheduled(Long conversationId, Long senderId, SendMessageRequest req, Long scheduledMessageId) {
+        return sendInternal(conversationId, senderId, req, scheduledMessageId);
+    }
+
+    private MessageDto sendInternal(Long conversationId, Long senderId, SendMessageRequest req, Long expectedScheduledMessageId) {
         String content = req.content() != null ? req.content().trim() : "";
         List<Long> attachmentIds = req.attachmentIds() != null ? req.attachmentIds() : List.of();
 
@@ -143,6 +151,11 @@ public class MessageService {
                 }
                 if (a.getMessage() != null) {
                     throw new ApiException(HttpStatus.BAD_REQUEST, "ATTACHMENT_ALREADY_ATTACHED", "Attachment is already linked to a message");
+                }
+                if (a.getScheduledMessage() != null
+                        && (expectedScheduledMessageId == null
+                            || !a.getScheduledMessage().getId().equals(expectedScheduledMessageId))) {
+                    throw new ApiException(HttpStatus.BAD_REQUEST, "ATTACHMENT_RESERVED", "Attachment is reserved for a scheduled message");
                 }
             }
         }
@@ -213,6 +226,7 @@ public class MessageService {
         // Link attachments
         for (Attachment a : attachments) {
             a.setMessage(message);
+            a.setScheduledMessage(null);
             attachmentRepository.save(a);
         }
 

@@ -415,7 +415,7 @@ public class AttachmentService {
     @Scheduled(cron = "0 0 * * * *")
     public void cleanupUnattachedAttachments() {
         Instant cutoff = Instant.now().minus(24, ChronoUnit.HOURS);
-        List<Attachment> expired = attachmentRepository.findByMessageIsNullAndCreatedAtBefore(cutoff);
+        List<Attachment> expired = attachmentRepository.findByMessageIsNullAndScheduledMessageIsNullAndCreatedAtBefore(cutoff);
         log.info("Running scheduled cleanup for unattached attachments older than 24h. Found: {}", expired.size());
         for (Attachment att : expired) {
             try {

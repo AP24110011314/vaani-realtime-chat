@@ -36,9 +36,17 @@ import AttachmentPreview from './components/chat/AttachmentPreview'
 import UserAvatar from './components/common/UserAvatar'
 import ProfilePage from './pages/ProfilePage'
 import SettingsPage from './pages/SettingsPage'
+import ScheduledPage from './pages/ScheduledPage'
 import { ThemeProvider } from './context/ThemeContext'
 import { userApi } from './api/userApi'
 import { authApi } from './api/authApi'
+import { scheduledApi } from './api/scheduledApi'
+import {
+  toLocalDateTimeInputValue,
+  fromLocalDateTimeInput,
+  getSchedulePresets,
+  validateScheduleDate,
+} from './lib/scheduleUtils'
 import * as useSocketModule from './hooks/useSocket'
 
 function createTestQueryClient() {
@@ -1809,6 +1817,104 @@ describe('Phase 5 Groups, Presence & System Messages', () => {
 
       updateMeSpy.mockRestore()
       blockedSpy.mockRestore()
+    })
+  })
+
+  describe('Phase 15 Scheduled Messages', () => {
+    it('computes presets, local datetime round-trips, and lead-time validation', () => {
+      const fixedNow = new Date(2026, 10, 26, 10, 0, 0) // 10:00 AM local
+      const presets = getSchedulePresets(fixedNow, 60)
+      expect(presets.map((p) => p.label)).toEqual([
+        'In 1 hour',
+        'Today 6:00 PM',
+        'Tomorrow 9:00 AM',
+        'Next Monday 9:00 AM',
+      ])
+
+      const inputStr = toLocalDateTimeInputValue(presets[0].date)
+      const parsed = fromLocalDateTimeInput(inputStr)
+      expect(parsed.getHours()).toBe(11)
+      expect(parsed.getMinutes()).toBe(0)
+
+      expect(validateScheduleDate(new Date(fixedNow.getTime() + 10_000), 60, 365, fixedNow)).toMatch(/at least/i)
+      expect(validateScheduleDate(new Date(fixedNow.getTime() + 120_000), 60, 365, fixedNow)).toBeNull()
+    })
+
+    it('opens schedule modal from composer and submits scheduled message', async () => {
+      const onSchedule = vi.fn().mockResolvedValueOnce({ id: 91 })
+      render(
+        <MessageComposer
+          onSendMessage={vi.fn()}
+          onScheduleMessage={onSchedule}
+          disabled={false}
+          conversationId={7}
+        />
+      )
+
+      const textarea = screen.getByPlaceholderText(/Type a message/i)
+      fireEvent.change(textarea, { target: { value: 'Reminder at 6pm' } })
+
+      const scheduleBtn = screen.getByRole('button', { name: 'Schedule message' })
+      fireEvent.click(scheduleBtn)
+
+      expect(screen.getByRole('dialog', { name: 'Schedule message' })).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: /Tomorrow 9:00 AM/i }))
+      fireEvent.click(screen.getByRole('dialog').querySelector('button[type="submit"]'))
+
+      await waitFor(() => {
+        expect(onSchedule).toHaveBeenCalledWith(
+          expect.objectContaining({
+            content: 'Reminder at 6pm',
+            scheduledFor: expect.any(String),
+          })
+        )
+      })
+    })
+
+    it('renders ScheduledPage and triggers sendNow, edit, and cancel actions', async () => {
+      const futureIso = new Date(Date.now() + 2 * 3600_000).toISOString()
+      const listSpy = vi.spyOn(scheduledApi, 'list').mockResolvedValue([
+        {
+          id: 55,
+          conversationId: 10,
+          conversationTitle: 'Ravi Kumar',
+          conversationType: 'DIRECT',
+          content: 'Standup update',
+          scheduledFor: futureIso,
+          status: 'PENDING',
+          attachments: [],
+        },
+      ])
+      const sendNowSpy = vi.spyOn(scheduledApi, 'sendNow').mockResolvedValueOnce({ id: 55, status: 'SENT' })
+      const cancelSpy = vi.spyOn(scheduledApi, 'cancel').mockResolvedValueOnce()
+
+      const qc = createTestQueryClient()
+      render(
+        <QueryClientProvider client={qc}>
+          <MemoryRouter>
+            <ScheduledPage />
+          </MemoryRouter>
+        </QueryClientProvider>
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Standup update')).toBeInTheDocument()
+      })
+      expect(screen.getByText('Ravi Kumar')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: /Send now/i }))
+      await waitFor(() => {
+        expect(sendNowSpy).toHaveBeenCalledWith(55)
+      })
+
+      fireEvent.click(screen.getByRole('button', { name: /Cancel/i }))
+      await waitFor(() => {
+        expect(cancelSpy).toHaveBeenCalledWith(55)
+      })
+
+      listSpy.mockRestore()
+      sendNowSpy.mockRestore()
+      cancelSpy.mockRestore()
     })
   })
 })

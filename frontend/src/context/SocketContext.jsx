@@ -509,6 +509,24 @@ export function SocketProvider({ children }) {
           break
         }
 
+        case 'scheduled.created':
+        case 'scheduled.updated':
+        case 'scheduled.sent':
+        case 'scheduled.cancelled': {
+          queryClient.invalidateQueries({ queryKey: ['scheduled'] })
+          break
+        }
+
+        case 'scheduled.failed': {
+          queryClient.invalidateQueries({ queryKey: ['scheduled'] })
+          triggerToast({
+            conversationId: data?.conversationId,
+            title: data?.conversationTitle || 'Scheduled message failed',
+            body: data?.failureReason || 'A scheduled message could not be delivered.',
+          })
+          break
+        }
+
         default:
           break
       }
