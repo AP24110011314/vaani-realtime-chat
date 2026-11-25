@@ -45,9 +45,9 @@ describe('LandingPage', () => {
       </MemoryRouter>
     )
 
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Real-time conversations/)
-    expect(screen.getByRole('button', { name: /Log in/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Sign up/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Conversations that/i)
+    expect(screen.getAllByRole('button', { name: /Sign In/i }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: /Get Started/i }).length).toBeGreaterThan(0)
   })
 })
 

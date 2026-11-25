@@ -2,6 +2,8 @@ import { Routes, Route } from 'react-router'
 import LandingPage from '../pages/LandingPage'
 import LoginPage from '../pages/LoginPage'
 import RegisterPage from '../pages/RegisterPage'
+import PrivacyPage from '../pages/PrivacyPage'
+import TermsPage from '../pages/TermsPage'
 import AppShell from '../pages/AppShell'
 import ProfilePage from '../pages/ProfilePage'
 import SettingsPage from '../pages/SettingsPage'
@@ -14,6 +16,8 @@ export default function AppRoutes() {
     <Routes>
       {/* Public landing */}
       <Route path="/" element={<LandingPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
+      <Route path="/terms" element={<TermsPage />} />
 
       {/* Public-only auth routes */}
       <Route element={<PublicOnlyRoute />}>
