@@ -17,9 +17,9 @@
 
 | Phase | Title | Status | Commit Hash | Notes | NEEDS MANUAL CHECK |
 |---|---|---|---|---|---|
-| 11 | @Mentions in groups | Done | Pending commit | `V7__mentions.sql`, `MentionParser`, `NotificationPolicy`, `/mentionable`, `notifyMode` (`ALL`/`MENTIONS`/`NONE`), `mentionUnreadCount`, `MentionPicker`, clickable `@Name` & `@all` pills, `Mentions` filter tab, `Jump to mention` pill. All backend (`MentionParserTest`, `NotificationPolicyTest`, `MentionsIntegrationTest`), Vitest (`59/59`), build, and Playwright E2E passed. | None |
-| 12 | Group invite links | In Progress | — | Starting next | — |
-| 13 | Voice messages | Pending | — | — | — |
+| 11 | @Mentions in groups | Done | `d753a2b` | `V7__mentions.sql`, `MentionParser`, `NotificationPolicy`, `/mentionable`, `notifyMode` (`ALL`/`MENTIONS`/`NONE`), `mentionUnreadCount`, `MentionPicker`, clickable `@Name` & `@all` pills, `Mentions` filter tab, `Jump to mention` pill. All backend (`MentionParserTest`, `NotificationPolicyTest`, `MentionsIntegrationTest`), Vitest (`59/59`), build, and Playwright E2E passed. | None |
+| 12 | Group invite links | Done | Pending commit | `V8__invites.sql`, SHA-256 hash-only `group_invites` (`PESSIMISTIC_WRITE` row lock), `group_join_requests` + live approval/rejection WS events, `banned` member enforcement, `/join/:code` preview/join page, `?next=` redirect preservation, `GroupInfoPanel` Invites/QR/Requests tabs, cold-tab `SocketContext` cache fix. All backend (`InviteIntegrationTest` + `verify`), Vitest (`63/63`), lint, build, and Playwright E2E passed. | `navigator.share` native OS share sheet (verified via capability check; test interactively on mobile/macOS Safari) |
+| 13 | Voice messages | In Progress | — | Starting next | — |
 | 14 | Link previews | Pending | — | — | — |
 | 15 | Scheduled messages | Pending | — | — | — |
 | 16 | Catch me up (AI) | Pending | — | — | — |

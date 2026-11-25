@@ -223,7 +223,7 @@ export function SocketProvider({ children }) {
           })
 
           // 2. Update conversation snippet and order in ['conversations']
-          queryClient.setQueryData(['conversations'], (oldConvs = []) => {
+          queryClient.setQueryData(['conversations'], (oldConvs) => {
             if (!Array.isArray(oldConvs)) return oldConvs
 
             const exists = oldConvs.some((c) => c.id === data.conversationId)
@@ -278,7 +278,7 @@ export function SocketProvider({ children }) {
             return old.map((m) => (m.id === data.id ? { ...m, ...data } : m))
           })
 
-          queryClient.setQueryData(['conversations'], (oldConvs = []) => {
+          queryClient.setQueryData(['conversations'], (oldConvs) => {
             if (!Array.isArray(oldConvs)) return oldConvs
             return oldConvs.map((conv) => {
               if (String(conv.id) === convId && conv.lastMessage?.id === data.id) {
@@ -310,7 +310,7 @@ export function SocketProvider({ children }) {
             )
           })
 
-          queryClient.setQueryData(['conversations'], (oldConvs = []) => {
+          queryClient.setQueryData(['conversations'], (oldConvs) => {
             if (!Array.isArray(oldConvs)) return oldConvs
             return oldConvs.map((conv) => {
               if (String(conv.id) === convId && conv.lastMessage?.id === messageId) {
@@ -330,16 +330,21 @@ export function SocketProvider({ children }) {
         }
 
         case 'conversation.created': {
-          queryClient.setQueryData(['conversations'], (oldConvs = []) => {
-            if (!Array.isArray(oldConvs)) return [data]
-            if (oldConvs.some((c) => c.id === data.id)) return oldConvs
-            return [data, ...oldConvs]
-          })
+          const existingConvs = queryClient.getQueryData(['conversations'])
+          if (Array.isArray(existingConvs)) {
+            queryClient.setQueryData(['conversations'], (oldConvs) => {
+              if (!Array.isArray(oldConvs)) return oldConvs
+              if (oldConvs.some((c) => c.id === data.id)) return oldConvs
+              return [data, ...oldConvs]
+            })
+          } else {
+            queryClient.invalidateQueries({ queryKey: ['conversations'] })
+          }
           break
         }
 
         case 'conversation.updated': {
-          queryClient.setQueryData(['conversations'], (oldConvs = []) => {
+          queryClient.setQueryData(['conversations'], (oldConvs) => {
             if (!Array.isArray(oldConvs)) return oldConvs
             return oldConvs.map((c) => (c.id === data.id ? { ...c, ...data } : c))
           })
@@ -352,10 +357,28 @@ export function SocketProvider({ children }) {
         case 'conversation.removed': {
           const convIdStr = String(data.conversationId)
           setRemovedEvent({ conversationId: convIdStr, ts: Date.now() })
-          queryClient.setQueryData(['conversations'], (oldConvs = []) => {
+          queryClient.setQueryData(['conversations'], (oldConvs) => {
             if (!Array.isArray(oldConvs)) return oldConvs
             return oldConvs.filter((c) => String(c.id) !== convIdStr)
           })
+          break
+        }
+
+        case 'join_request.created':
+        case 'join_request.decided': {
+          if (data?.conversationId) {
+            queryClient.invalidateQueries({
+              queryKey: ['joinRequests', String(data.conversationId)],
+            })
+            if (type === 'join_request.created' && data.request?.user?.name) {
+              triggerToast({
+                id: `jr-${data.request.id}`,
+                conversationId: String(data.conversationId),
+                senderName: data.request.user.name,
+                content: 'Requested to join the group via invite link',
+              })
+            }
+          }
           break
         }
 
@@ -393,7 +416,7 @@ export function SocketProvider({ children }) {
             })
           })
 
-          queryClient.setQueryData(['conversations'], (oldConvs = []) => {
+          queryClient.setQueryData(['conversations'], (oldConvs) => {
             if (!Array.isArray(oldConvs)) return oldConvs
             return oldConvs.map((conv) => {
               if (String(conv.id) === convId && conv.lastMessage) {
@@ -419,7 +442,7 @@ export function SocketProvider({ children }) {
 
         case 'unread.updated': {
           const convId = String(data.conversationId)
-          queryClient.setQueryData(['conversations'], (oldConvs = []) => {
+          queryClient.setQueryData(['conversations'], (oldConvs) => {
             if (!Array.isArray(oldConvs)) return oldConvs
             return oldConvs.map((c) =>
               String(c.id) === convId

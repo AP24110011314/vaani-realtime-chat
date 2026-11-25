@@ -1,9 +1,10 @@
-import { Navigate, Outlet } from 'react-router'
+import { Navigate, Outlet, useLocation } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
 import Spinner from '../components/common/Spinner'
 
 export default function ProtectedRoute() {
   const { user, loading } = useAuth()
+  const location = useLocation()
 
   if (loading) {
     return (
@@ -17,7 +18,12 @@ export default function ProtectedRoute() {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />
+    const target = `${location.pathname || ''}${location.search || ''}`
+    const loginUrl =
+      target && target !== '/app' && target !== '/'
+        ? `/login?next=${encodeURIComponent(target)}`
+        : '/login'
+    return <Navigate to={loginUrl} replace />
   }
 
   return <Outlet />

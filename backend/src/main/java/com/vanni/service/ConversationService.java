@@ -267,6 +267,7 @@ public class ConversationService {
                 }
                 existing.setLeftAt(null);
                 existing.setRole(MemberRole.MEMBER);
+                existing.setBanned(false);
                 existing.setJoinedAt(Instant.now());
                 conversationMemberRepository.save(existing);
                 newlyAddedUsers.add(existing.getUser());
@@ -319,6 +320,7 @@ public class ConversationService {
             .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "MEMBER_NOT_FOUND", "User is not an active member of this group"));
 
         targetMember.setLeftAt(Instant.now());
+        targetMember.setBanned(true);
         conversationMemberRepository.save(targetMember);
 
         createAndBroadcastSystemMessage(conv, adminMember.getUser(), adminMember.getUser().getName() + " removed " + targetMember.getUser().getName());
@@ -398,7 +400,7 @@ public class ConversationService {
         return toDto(conv, adminId);
     }
 
-    private Message createAndBroadcastSystemMessage(Conversation conv, User actor, String content) {
+    public Message createAndBroadcastSystemMessage(Conversation conv, User actor, String content) {
         Message msg = new Message();
         msg.setConversation(conv);
         msg.setSender(actor);

@@ -34,10 +34,10 @@
 Link lifecycle (create, preview, join, use count, max uses, expiry, revoke); race: two users use the last remaining use at the same time (only one succeeds); banned user cannot join; non-admin cannot create/list; approval flow; hash only stored in DB; brute-force rate limit 429. Playwright: full join flow including login redirect.
 
 ## Acceptance checklist
-- [ ] Admin creates a link, shares it, a logged-out user opens it, logs in and lands in the group.
-- [ ] Expired, revoked, full and banned cases show the right neutral messages.
-- [ ] Approval mode: request appears live for admins; approval adds the member instantly.
-- [ ] DB contains no plaintext codes; logs contain no codes.
+- [x] Admin creates a link, shares it, a logged-out user opens it, logs in and lands in the group.
+- [x] Expired, revoked, full and banned cases show the right neutral messages.
+- [x] Approval mode: request appears live for admins; approval adds the member instantly.
+- [x] DB contains no plaintext codes; logs contain no codes.
 
 ## Commit
 ```bash

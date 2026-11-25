@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { conversationApi } from '../../api/conversationApi'
+import { inviteApi } from '../../api/inviteApi'
 import { messageApi } from '../../api/messageApi'
 import { useSocket } from '../../hooks/useSocket'
 import { useTyping } from '../../hooks/useTyping'
@@ -114,6 +115,12 @@ export default function ChatWindow({
     const myMember = conversation.members?.find((m) => m.id === currentUserId)
     return myMember?.role === 'ADMIN'
   }, [conversation, currentUserId])
+
+  const { data: pendingRequests = [] } = useQuery({
+    queryKey: ['joinRequests', conversationId],
+    queryFn: () => inviteApi.listRequests(conversationId, 'PENDING'),
+    enabled: Boolean(conversationId && isGroupAdmin),
+  })
 
   // Load older messages (cursor before)
   const loadOlderMessages = useCallback(async () => {
@@ -376,7 +383,11 @@ export default function ChatWindow({
   return (
     <div className="flex-1 flex h-full gap-3 min-w-0 overflow-hidden">
       {/* Main Chat Glass Card */}
-      <div className="flex-1 flex flex-col h-full min-w-0 rounded-[24px] md:rounded-[28px] glass overflow-hidden">
+      <div
+        className={`flex-1 flex-col h-full min-w-0 rounded-[24px] md:rounded-[28px] glass overflow-hidden ${
+          showGroupInfo && conversation?.type === 'GROUP' ? 'hidden md:flex' : 'flex'
+        }`}
+      >
         <ChatHeader
           key={`header-${conversationId}`}
           conversation={conversation}
@@ -389,6 +400,7 @@ export default function ChatWindow({
           }}
           typingText={typingText}
           onSelectSearchMatch={(msgId) => setHighlightedMessageId(msgId)}
+          pendingJoinCount={pendingRequests.length}
         />
         <MessageList
           key={`list-${conversationId}`}

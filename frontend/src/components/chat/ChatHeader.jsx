@@ -25,6 +25,7 @@ export default function ChatHeader({
   onBlockChange,
   typingText,
   onSelectSearchMatch,
+  pendingJoinCount = 0,
 }) {
   const isGroup = conversation?.type === 'GROUP'
   const { title, avatarUrl, members, description } = conversation || {}
@@ -291,11 +292,19 @@ export default function ChatHeader({
             {isGroup && onToggleInfo && (
               <button
                 onClick={onToggleInfo}
-                className="p-1.5 text-ink-muted hover:text-ink hover:bg-[var(--glass-bg-hover)] rounded-xl transition-all active:scale-95 focus-accent cursor-pointer"
+                className="relative p-1.5 text-ink-muted hover:text-ink hover:bg-[var(--glass-bg-hover)] rounded-xl transition-all active:scale-95 focus-accent cursor-pointer"
                 title="Group Info"
                 aria-label="Group Info"
               >
                 <Info className="w-4 h-4" />
+                {pendingJoinCount > 0 && (
+                  <span
+                    className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-1 rounded-full text-[9px] font-bold accent-badge flex items-center justify-center tabular-nums"
+                    aria-label={`${pendingJoinCount} pending join requests`}
+                  >
+                    {pendingJoinCount}
+                  </span>
+                )}
               </button>
             )}
           </div>

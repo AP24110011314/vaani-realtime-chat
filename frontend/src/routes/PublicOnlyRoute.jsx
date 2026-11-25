@@ -1,9 +1,11 @@
-import { Navigate, Outlet } from 'react-router'
+import { Navigate, Outlet, useLocation } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
+import { getSafeNextPath } from './routeUtils'
 import Spinner from '../components/common/Spinner'
 
 export default function PublicOnlyRoute() {
   const { user, loading } = useAuth()
+  const location = useLocation()
 
   if (loading) {
     return (
@@ -16,7 +18,7 @@ export default function PublicOnlyRoute() {
   }
 
   if (user) {
-    return <Navigate to="/app" replace />
+    return <Navigate to={getSafeNextPath(location.search)} replace />
   }
 
   return <Outlet />

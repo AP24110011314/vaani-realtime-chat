@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { useAuth } from '../hooks/useAuth'
+import { getSafeNextPath } from '../routes/routeUtils'
 import Input from '../components/common/Input'
 import Button from '../components/common/Button'
 import VanniLogo from '../components/common/VanniLogo'
@@ -38,9 +39,13 @@ const registerSchema = z
 export default function RegisterPage() {
   const { register: registerUser } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [serverError, setServerError] = useState(null)
+
+  const nextUrl = getSafeNextPath(location.search)
+  const loginLink = location.search ? `/login${location.search}` : '/login'
 
   const {
     register,
@@ -60,7 +65,7 @@ export default function RegisterPage() {
     setServerError(null)
     try {
       await registerUser(data.name, data.email, data.password)
-      navigate('/app')
+      navigate(nextUrl, { replace: true })
     } catch (err) {
       const msg =
         err.response?.data?.message || err.message || 'Registration failed'
@@ -81,7 +86,7 @@ export default function RegisterPage() {
           <p className="mt-2 text-sm text-ink-muted">
             Already have an account?{' '}
             <Link
-              to="/login"
+              to={loginLink}
               className="font-semibold text-accent-text hover:underline transition-colors"
             >
               Sign in

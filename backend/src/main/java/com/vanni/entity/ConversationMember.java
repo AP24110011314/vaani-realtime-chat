@@ -60,6 +60,10 @@ public class ConversationMember {
     @Builder.Default
     private boolean pinned = false;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean banned = false;
+
     public ConversationMember(Conversation conversation, User user, MemberRole role) {
         this.conversation = conversation;
         this.user = user;

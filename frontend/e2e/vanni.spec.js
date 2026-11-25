@@ -19,11 +19,17 @@ test.describe('Vanni Phase 9 E2E (Two Browsers, Realtime, Groups, Security, Mobi
     const pageC = await ctxC.newPage()
 
     let alertTriggered = false
-    pageA.on('dialog', () => {
-      alertTriggered = true
+    pageA.on('dialog', async (d) => {
+      if (d.type() === 'alert') alertTriggered = true
+      await d.accept()
     })
-    pageB.on('dialog', () => {
-      alertTriggered = true
+    pageB.on('dialog', async (d) => {
+      if (d.type() === 'alert') alertTriggered = true
+      await d.accept()
+    })
+    pageC.on('dialog', async (d) => {
+      if (d.type() === 'alert') alertTriggered = true
+      await d.accept()
     })
 
     let allowExpected400 = false
@@ -192,6 +198,79 @@ test.describe('Vanni Phase 9 E2E (Two Browsers, Realtime, Groups, Security, Mobi
     await squadRowB.click()
     await expect(pageB.getByRole('log').getByRole('button', { name: new RegExp(`@Ravi ${ts}`) })).toBeVisible({ timeout: 10000 })
     await expect(squadRowB.getByLabel('Unread mentions')).toHaveCount(0, { timeout: 10000 })
+
+    // 6c. Phase 12 Group Invite Links flow: create InviteClub with Ravi & Mira; Mira leaves (no ban) & rejoins via logged-out ?next= open link; Ravi leaves & rejoins via approval link
+    const inviteGroupName = `InviteClub ${ts}`
+    await pageA.getByRole('button', { name: 'New Group' }).click()
+    const invGroupDialog = pageA.getByRole('dialog')
+    await invGroupDialog.getByPlaceholder('e.g. Design Team, Book Club').fill(inviteGroupName)
+    await invGroupDialog.getByPlaceholder('Search users by name or email...').fill(`Ravi ${ts}`)
+    await invGroupDialog.getByRole('button', { name: new RegExp(`Ravi ${ts}`) }).click()
+    await invGroupDialog.getByPlaceholder('Search users by name or email...').fill(`Mira ${ts}`)
+    await invGroupDialog.getByRole('button', { name: new RegExp(`Mira ${ts}`) }).click()
+    await invGroupDialog.getByRole('button', { name: 'Create Group' }).click()
+    await expect(pageA.getByRole('heading', { name: inviteGroupName })).toBeVisible({ timeout: 10000 })
+
+    // Mira leaves InviteClub cleanly (no ban) before testing logged-out invite link join
+    await pageC.getByRole('button', { name: new RegExp(inviteGroupName) }).first().click()
+    await expect(pageC.getByRole('heading', { name: inviteGroupName })).toBeVisible({ timeout: 10000 })
+    await pageC.getByRole('button', { name: 'Group Info' }).click()
+    await pageC.getByRole('button', { name: 'Leave Group' }).click()
+    await expect(pageC.getByRole('heading', { name: /Welcome to Vanni/i })).toBeVisible({ timeout: 10000 })
+
+    await pageA.getByRole('button', { name: 'Group Info' }).click()
+    await pageA.getByRole('button', { name: 'Invites' }).click()
+    await pageA.locator('form').getByRole('button', { name: 'Create Invite Link' }).click()
+    await expect(pageA.getByText(/Link created — copy it now/i)).toBeVisible({ timeout: 10000 })
+
+    const openInviteUrl = (await pageA.locator('.select-all').innerText()).trim()
+    const openPath = new URL(openInviteUrl).pathname
+    await pageA.getByRole('button', { name: 'Toggle QR code' }).click()
+    await expect(pageA.locator('aside svg').last()).toBeVisible()
+
+    // Logged-out Mira opens /join/:code -> redirected to /login?next=... -> logs in -> joins
+    await pageC.getByRole('button', { name: 'Log Out' }).click()
+    await expect(pageC).not.toHaveURL(/\/app/, { timeout: 10000 })
+    await pageC.goto(openPath)
+    await expect(pageC).toHaveURL(new RegExp(`/login\\?next=${encodeURIComponent(openPath).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))
+    await pageC.getByLabel(/Email Address/i).fill(miraEmail)
+    await pageC.getByLabel(/^Password$/i).fill('Password123')
+    await pageC.getByRole('button', { name: /Sign In/i }).click()
+
+    await expect(pageC).toHaveURL(new RegExp(openPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    await expect(pageC.getByRole('heading', { name: inviteGroupName })).toBeVisible({ timeout: 10000 })
+    await pageC.getByRole('button', { name: 'Join Group' }).click()
+    await expect(pageC).toHaveURL(/\/app\/c\/\d+/)
+    await expect(pageC.getByRole('log').getByText(/joined using an invite link/i)).toBeVisible({ timeout: 10000 })
+    await expect(pageA.getByRole('log').getByText(/joined using an invite link/i)).toBeVisible({ timeout: 10000 })
+
+    // Ravi leaves InviteClub (non-ban) so he can test approval-required invite
+    await pageB.getByRole('button', { name: new RegExp(inviteGroupName) }).first().click()
+    await expect(pageB.getByRole('heading', { name: inviteGroupName })).toBeVisible({ timeout: 10000 })
+    await pageB.getByRole('button', { name: 'Group Info' }).click()
+    await pageB.getByRole('button', { name: 'Leave Group' }).click()
+    await expect(pageB.getByRole('heading', { name: /Welcome to Vanni/i })).toBeVisible({ timeout: 10000 })
+
+    await pageA.getByLabel(/Require admin approval/i).check()
+    await pageA.locator('form').getByRole('button', { name: 'Create Invite Link' }).click()
+    await expect(pageA.locator('.select-all')).not.toHaveText(openInviteUrl)
+    const approvalUrl = (await pageA.locator('.select-all').innerText()).trim()
+    const approvalPath = new URL(approvalUrl).pathname
+
+    await pageB.goto(approvalPath)
+    await expect(pageB.getByText(/Approval required/i)).toBeVisible({ timeout: 10000 })
+    await pageB.getByRole('button', { name: 'Request to Join' }).click()
+    await expect(pageB.getByRole('heading', { name: 'Request Sent' })).toBeVisible({ timeout: 10000 })
+
+    await pageA.getByRole('button', { name: /Requests/i }).click()
+    await expect(pageA.getByRole('main').getByText(`Ravi ${ts}`, { exact: true })).toBeVisible({ timeout: 10000 })
+    await pageA.getByRole('button', { name: 'Approve request' }).click()
+
+    await expect(pageA.getByRole('log').getByText(new RegExp(`Ravi ${ts}.*joined`))).toBeVisible({ timeout: 10000 })
+    await pageB.getByRole('link', { name: /Go to Chats/i }).click()
+    await expect(pageB.getByRole('button', { name: new RegExp(inviteGroupName) }).first()).toBeVisible({ timeout: 10000 })
+    await squadRowB.click()
+    await pageA.getByRole('button', { name: new RegExp(`E2E Squad ${ts}`) }).first().click()
 
     // 7. Mobile 390px viewport check on Context B
     await pageB.setViewportSize({ width: 390, height: 844 })

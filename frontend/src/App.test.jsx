@@ -1,12 +1,16 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, Routes, Route } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthContext } from './context/AuthContext'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
+import JoinPage from './pages/JoinPage'
+import ProtectedRoute from './routes/ProtectedRoute'
+import PublicOnlyRoute from './routes/PublicOnlyRoute'
 import AppRoutes from './routes/AppRoutes'
+import { inviteApi } from './api/inviteApi'
 import MessageComposer from './components/chat/MessageComposer'
 import ConversationList from './components/chat/ConversationList'
 import ConversationItem from './components/chat/ConversationItem'
@@ -1281,6 +1285,213 @@ describe('Phase 5 Groups, Presence & System Messages', () => {
       fireEvent.click(screen.getByTitle('Conversations with unread @mentions'))
       expect(screen.getByText('Core Team')).toBeInTheDocument()
       expect(screen.queryByText('Random')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('Phase 12: Group Invite Links', () => {
+    it('renders JoinPage preview and joins open group invite', async () => {
+      const previewSpy = vi.spyOn(inviteApi, 'preview').mockResolvedValueOnce({
+        conversationId: 42,
+        title: 'Engineering',
+        description: 'Backend & Infra chat',
+        memberCount: 7,
+        requiresApproval: false,
+        alreadyMember: false,
+      })
+      const joinSpy = vi.spyOn(inviteApi, 'join').mockResolvedValueOnce({
+        status: 'JOINED',
+        conversation: { id: 42, title: 'Engineering' },
+      })
+
+      const queryClient = createTestQueryClient()
+      render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={['/join/abc123token']}>
+            <Routes>
+              <Route path="/join/:code" element={<JoinPage />} />
+              <Route path="/app/c/:conversationId" element={<div>Group Conversation 42</div>} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>
+      )
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: 'Engineering' })).toBeInTheDocument()
+      })
+      expect(screen.getByText('7 members')).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: /Join Group/i }))
+
+      await waitFor(() => {
+        expect(joinSpy).toHaveBeenCalledWith('abc123token')
+        expect(screen.getByText('Group Conversation 42')).toBeInTheDocument()
+      })
+
+      previewSpy.mockRestore()
+      joinSpy.mockRestore()
+    })
+
+    it('shows approval flow and unavailable error state on JoinPage', async () => {
+      const previewSpy = vi.spyOn(inviteApi, 'preview').mockResolvedValueOnce({
+        conversationId: 9,
+        title: 'Private Guild',
+        description: '',
+        memberCount: 1,
+        requiresApproval: true,
+        alreadyMember: false,
+      })
+      const joinSpy = vi.spyOn(inviteApi, 'join').mockResolvedValueOnce({
+        status: 'PENDING',
+        request: { id: 99, status: 'PENDING' },
+      })
+
+      const queryClient = createTestQueryClient()
+      const { unmount } = render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={['/join/approval-code']}>
+            <Routes>
+              <Route path="/join/:code" element={<JoinPage />} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Approval required')).toBeInTheDocument()
+      })
+      fireEvent.click(screen.getByRole('button', { name: /Request to Join/i }))
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: 'Request Sent' })).toBeInTheDocument()
+      })
+      unmount()
+
+      previewSpy.mockRejectedValueOnce({
+        response: { data: { message: 'Invite has expired' } },
+      })
+
+      render(
+        <QueryClientProvider client={createTestQueryClient()}>
+          <MemoryRouter initialEntries={['/join/expired-code']}>
+            <Routes>
+              <Route path="/join/:code" element={<JoinPage />} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>
+      )
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: 'Invite Unavailable' })).toBeInTheDocument()
+        expect(screen.getByText('Invite has expired')).toBeInTheDocument()
+      })
+
+      previewSpy.mockRestore()
+      joinSpy.mockRestore()
+    })
+
+    it('preserves safe ?next= param through ProtectedRoute and LoginPage', async () => {
+      const mockLogin = vi.fn().mockResolvedValueOnce({ id: 1, name: 'Asha' })
+      render(
+        <AuthContext.Provider value={{ user: null, loading: false, login: mockLogin }}>
+          <MemoryRouter initialEntries={['/join/secret-code']}>
+            <Routes>
+              <Route element={<PublicOnlyRoute />}>
+                <Route path="/login" element={<LoginPage />} />
+              </Route>
+              <Route element={<ProtectedRoute />}>
+                <Route path="/join/:code" element={<div>Invite Preview Page</div>} />
+              </Route>
+            </Routes>
+          </MemoryRouter>
+        </AuthContext.Provider>
+      )
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: /Sign in to your account/i })).toBeInTheDocument()
+      })
+      expect(screen.getByRole('link', { name: /Create one for free/i })).toHaveAttribute('href', '/register?next=%2Fjoin%2Fsecret-code')
+
+      fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'asha@vanni.app' } })
+      fireEvent.change(screen.getByLabelText(/^Password$/i), { target: { value: 'Password123' } })
+      fireEvent.click(screen.getByRole('button', { name: /Sign In/i }))
+
+      await waitFor(() => {
+        expect(mockLogin).toHaveBeenCalledWith('asha@vanni.app', 'Password123')
+      })
+    })
+
+    it('manages invite creation, QR toggle, revocation, and join request approvals in GroupInfoPanel', async () => {
+      const listSpy = vi.spyOn(inviteApi, 'list').mockResolvedValue([
+        { id: 10, codePrefix: 'abcd', status: 'ACTIVE', useCount: 1, maxUses: 10, requiresApproval: false },
+      ])
+      const listReqSpy = vi.spyOn(inviteApi, 'listRequests').mockResolvedValue([
+        { id: 55, user: { id: 3, name: 'Mira', about: 'Design' } },
+      ])
+      const createSpy = vi.spyOn(inviteApi, 'create').mockResolvedValueOnce({
+        id: 11,
+        codePrefix: 'wxyz',
+        status: 'ACTIVE',
+        useCount: 0,
+        maxUses: 1,
+        requiresApproval: true,
+        url: 'http://localhost:5173/join/wxyzFullToken',
+      })
+      const revokeSpy = vi.spyOn(inviteApi, 'revoke').mockResolvedValueOnce({})
+      const approveSpy = vi.spyOn(inviteApi, 'approveRequest').mockResolvedValueOnce({})
+
+      const conv = {
+        id: 7,
+        type: 'GROUP',
+        title: 'Launch Squad',
+        myRole: 'ADMIN',
+        members: [{ id: 1, name: 'Asha', role: 'ADMIN', online: true }],
+      }
+
+      render(
+        <QueryClientProvider client={createTestQueryClient()}>
+          <GroupInfoPanel conversation={conv} currentUserId={1} onClose={vi.fn()} onLeft={vi.fn()} />
+        </QueryClientProvider>
+      )
+
+      // Requests badge shows pending count
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Requests\s*1/i })).toBeInTheDocument()
+      })
+
+      // Switch to Invites tab
+      fireEvent.click(screen.getByRole('button', { name: 'Invites' }))
+      await waitFor(() => {
+        expect(screen.getByText('.../join/abcd...')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByLabelText(/Require admin approval/i))
+      fireEvent.change(screen.getByLabelText('Invite max uses'), { target: { value: '1' } })
+      fireEvent.submit(screen.getByRole('button', { name: 'Create Invite Link' }).closest('form'))
+
+      await waitFor(() => {
+        expect(createSpy).toHaveBeenCalledWith(7, {
+          expiresInSeconds: 604800,
+          maxUses: 1,
+          requiresApproval: true,
+        })
+        expect(screen.getByText('http://localhost:5173/join/wxyzFullToken')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Toggle QR code' }))
+      expect(document.querySelector('svg[width="148"]') || document.querySelector('.bg-white svg')).toBeTruthy()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Revoke invite link' }))
+      await waitFor(() => expect(revokeSpy).toHaveBeenCalledWith(7, 10))
+
+      // Switch to Requests tab and approve Mira
+      fireEvent.click(screen.getByRole('button', { name: /Requests/i }))
+      await waitFor(() => expect(screen.getByText('Mira')).toBeInTheDocument())
+      fireEvent.click(screen.getByRole('button', { name: 'Approve request' }))
+      await waitFor(() => expect(approveSpy).toHaveBeenCalledWith(7, 55))
+
+      listSpy.mockRestore()
+      listReqSpy.mockRestore()
+      createSpy.mockRestore()
+      revokeSpy.mockRestore()
+      approveSpy.mockRestore()
     })
   })
 })

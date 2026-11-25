@@ -5,6 +5,7 @@ import RegisterPage from '../pages/RegisterPage'
 import PrivacyPage from '../pages/PrivacyPage'
 import TermsPage from '../pages/TermsPage'
 import AppShell from '../pages/AppShell'
+import JoinPage from '../pages/JoinPage'
 import ProfilePage from '../pages/ProfilePage'
 import SettingsPage from '../pages/SettingsPage'
 import NotFoundPage from '../pages/NotFoundPage'
@@ -29,6 +30,7 @@ export default function AppRoutes() {
       <Route element={<ProtectedRoute />}>
         <Route path="/app" element={<AppShell />} />
         <Route path="/app/c/:conversationId" element={<AppShell />} />
+        <Route path="/join/:code" element={<JoinPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>

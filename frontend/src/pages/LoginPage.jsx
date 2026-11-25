@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { useAuth } from '../hooks/useAuth'
+import { getSafeNextPath } from '../routes/routeUtils'
 import Input from '../components/common/Input'
 import Button from '../components/common/Button'
 import VanniLogo from '../components/common/VanniLogo'
@@ -17,8 +18,12 @@ const loginSchema = z.object({
 export default function LoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [showPassword, setShowPassword] = useState(false)
   const [serverError, setServerError] = useState(null)
+
+  const nextUrl = getSafeNextPath(location.search)
+  const registerLink = location.search ? `/register${location.search}` : '/register'
 
   const {
     register,
@@ -36,7 +41,7 @@ export default function LoginPage() {
     setServerError(null)
     try {
       await login(data.email, data.password)
-      navigate('/app')
+      navigate(nextUrl, { replace: true })
     } catch (err) {
       const msg =
         err.response?.data?.message || err.message || 'Invalid email or password'
@@ -57,7 +62,7 @@ export default function LoginPage() {
           <p className="mt-2 text-sm text-ink-muted">
             Don't have an account?{' '}
             <Link
-              to="/register"
+              to={registerLink}
               className="font-semibold text-accent-text hover:underline transition-colors"
             >
               Create one for free
