@@ -9,9 +9,15 @@ import MessageList from './MessageList'
 import MessageComposer from './MessageComposer'
 import GroupInfoPanel from './GroupInfoPanel'
 import MessageReceiptModal from './MessageReceiptModal'
-import { MessageSquare, ShieldAlert } from 'lucide-react'
+import { ShieldAlert, SquarePen, Users } from 'lucide-react'
 
-export default function ChatWindow({ conversationId, onBack, currentUserId }) {
+export default function ChatWindow({
+  conversationId,
+  onBack,
+  currentUserId,
+  onOpenNewChat,
+  onOpenNewGroup,
+}) {
   const queryClient = useQueryClient()
   const { isConnected, sendMessage, setActiveConversationId, removedEvent, sendRead } = useSocket()
   const { typingText, handleKeyStroke, handleStopTyping } = useTyping(conversationId)
@@ -290,33 +296,68 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
 
   if (!conversationId) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500 bg-slate-950">
-        <div className="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 mb-4 shadow-xl">
-          <MessageSquare className="w-8 h-8 text-indigo-500" />
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center rounded-[24px] md:rounded-[28px] glass overflow-hidden">
+        {/* Layered floating glass speech-bubble illustration */}
+        <div className="relative w-44 h-36 mb-6 flex items-center justify-center" aria-hidden="true">
+          <div className="absolute -inset-2 rounded-full opacity-45 blur-xl accent-ring pointer-events-none" />
+          <div className="relative w-28 h-16 -translate-x-5 -translate-y-4 rounded-[22px] rounded-bl-md glass-strong px-4 py-3 flex flex-col justify-center gap-2 animate-float-slow">
+            <span className="h-2 w-16 rounded-full bg-[var(--text-primary)] opacity-25" />
+            <span className="h-2 w-10 rounded-full bg-[var(--text-primary)] opacity-15" />
+          </div>
+          <div className="absolute right-2 bottom-3 w-28 h-16 rounded-[22px] rounded-br-md bubble-sent px-4 py-3 flex flex-col justify-center gap-2 animate-float-delayed">
+            <span className="h-2 w-14 rounded-full bg-current opacity-85" />
+            <span className="h-2 w-20 rounded-full bg-current opacity-65" />
+          </div>
         </div>
-        <h2 className="text-lg font-bold text-slate-200 mb-1">
+
+        <h2 className="text-2xl font-bold text-ink heading-tight mb-2">
           Welcome to Vanni
         </h2>
-        <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
-          Select a chat from the sidebar or start a new conversation to start messaging.
+        <p className="text-sm text-ink-muted max-w-sm leading-relaxed mb-7">
+          Select a chat from the sidebar or start a fresh conversation. Messages, groups, and media stay in sync in real time.
         </p>
+
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          {onOpenNewChat && (
+            <button
+              type="button"
+              onClick={onOpenNewChat}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full btn-accent text-xs font-semibold cursor-pointer focus-accent"
+            >
+              <SquarePen className="w-4 h-4" />
+              <span>Start a chat</span>
+            </button>
+          )}
+          {onOpenNewGroup && (
+            <button
+              type="button"
+              onClick={onOpenNewGroup}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full btn-glass text-xs font-semibold cursor-pointer focus-accent"
+            >
+              <Users className="w-4 h-4 text-accent-text" />
+              <span>Create a group</span>
+            </button>
+          )}
+        </div>
       </div>
     )
   }
 
   if (convError) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-400 bg-slate-950">
-        <ShieldAlert className="w-10 h-10 text-rose-500 mb-3" />
-        <h3 className="text-sm font-semibold text-slate-200 mb-1">
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center rounded-[24px] md:rounded-[28px] glass">
+        <div className="w-14 h-14 rounded-2xl glass-strong flex items-center justify-center text-[var(--danger-text)] mb-4">
+          <ShieldAlert className="w-7 h-7" />
+        </div>
+        <h3 className="text-base font-bold text-ink mb-1">
           Conversation not found
         </h3>
-        <p className="text-xs text-slate-400 mb-4">
+        <p className="text-xs text-ink-muted mb-5 max-w-xs">
           You might not have permission to view this conversation.
         </p>
         <button
           onClick={onBack}
-          className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium"
+          className="px-4 py-2 rounded-full btn-glass text-xs font-semibold cursor-pointer focus-accent"
         >
           Return to chats
         </button>
@@ -325,8 +366,9 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
   }
 
   return (
-    <div className="flex-1 flex h-full bg-slate-950 overflow-hidden">
-      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
+    <div className="flex-1 flex h-full gap-3 min-w-0 overflow-hidden">
+      {/* Main Chat Glass Card */}
+      <div className="flex-1 flex flex-col h-full min-w-0 rounded-[24px] md:rounded-[28px] glass overflow-hidden">
         <ChatHeader
           conversation={conversation}
           onBack={onBack}
@@ -350,6 +392,7 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
           onEdit={(msg) => setEditingMessage(msg)}
           onDelete={handleDeleteMessage}
           onToggleReaction={handleToggleReaction}
+          onSendQuickReply={(text) => handleSendMessage(text)}
           highlightedMessageId={highlightedMessageId}
           onNearBottom={() => {
             if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
@@ -370,6 +413,7 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
         />
       </div>
 
+      {/* Optional Third Floating Glass Card for Group Info */}
       {showGroupInfo && conversation?.type === 'GROUP' && (
         <GroupInfoPanel
           conversation={conversation}

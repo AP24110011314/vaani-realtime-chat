@@ -128,6 +128,27 @@ test.describe('Vanni Phase 9 E2E (Two Browsers, Realtime, Groups, Security, Mobi
     // Verify reconnect / reload resilience (page reload rehydrates session + messages cleanly)
     await pageA.reload()
     await expect(pageA.getByRole('log').getByText('Welcome to the squad!')).toBeVisible({ timeout: 10000 })
+
+    // Verify Light / Dark theme toggle visibly updates the document and persists
+    await pageA.goto('/settings')
+    await expect(pageA.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible()
+    await pageA.getByRole('button', { name: 'Dark' }).click()
+    await expect(pageA.locator('html')).toHaveClass(/\bdark\b/)
+
+    let darkBg = ''
+    await expect(async () => {
+      darkBg = await pageA.evaluate(() => getComputedStyle(document.body).backgroundColor)
+      expect(darkBg).not.toContain('0.984')
+    }).toPass({ timeout: 3000 })
+
+    await pageA.getByRole('button', { name: 'Light' }).click()
+    await expect(pageA.locator('html')).not.toHaveClass(/\bdark\b/)
+
+    await expect(async () => {
+      const lightBg = await pageA.evaluate(() => getComputedStyle(document.body).backgroundColor)
+      expect(lightBg).not.toBe(darkBg)
+    }).toPass({ timeout: 3000 })
+
     expect(uncaughtErrors).toEqual([])
 
     await ctxA.close()

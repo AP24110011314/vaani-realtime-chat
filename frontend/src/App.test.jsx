@@ -1002,9 +1002,28 @@ describe('Phase 5 Groups, Presence & System Messages', () => {
       })
 
       // Theme toggle buttons
-      expect(screen.getByRole('button', { name: /Light/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /Dark/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /System/i })).toBeInTheDocument()
+      const lightBtn = screen.getByRole('button', { name: /Light/i })
+      const darkBtn = screen.getByRole('button', { name: /Dark/i })
+      const systemBtn = screen.getByRole('button', { name: /System/i })
+      expect(lightBtn).toBeInTheDocument()
+      expect(darkBtn).toBeInTheDocument()
+      expect(systemBtn).toBeInTheDocument()
+
+      // Clicking Light removes the .dark class on <html> and persists preference
+      fireEvent.click(lightBtn)
+      expect(document.documentElement.classList.contains('dark')).toBe(false)
+      expect(document.documentElement.style.colorScheme).toBe('light')
+      expect(localStorage.getItem('vanni_theme')).toBe('light')
+
+      // Clicking Dark adds the .dark class on <html> and persists preference
+      fireEvent.click(darkBtn)
+      expect(document.documentElement.classList.contains('dark')).toBe(true)
+      expect(document.documentElement.style.colorScheme).toBe('dark')
+      expect(localStorage.getItem('vanni_theme')).toBe('dark')
+
+      // Clicking System persists system preference
+      fireEvent.click(systemBtn)
+      expect(localStorage.getItem('vanni_theme')).toBe('system')
     })
   })
 })

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router'
 import { conversationApi } from '../api/conversationApi'
@@ -11,6 +12,8 @@ export default function AppShell() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const queryClient = useQueryClient()
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false)
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false)
 
   // Conversations list query without polling (realtime updates via WebSocket)
   const { data: conversations = [], isLoading } = useQuery({
@@ -63,12 +66,12 @@ export default function AppShell() {
   }
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-slate-950 text-slate-100 overflow-hidden font-sans">
+    <div className="h-[100dvh] w-screen flex flex-col text-ink overflow-hidden font-sans p-1.5 sm:p-3 md:p-4 pb-[max(0.375rem,env(safe-area-inset-bottom))] gap-2 md:gap-3">
       <ConnectionBanner />
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar - visible on desktop, or mobile when no conversation is selected */}
+      <div className="flex-1 flex overflow-hidden gap-3 min-h-0">
+        {/* Floating Sidebar Glass Card */}
         <div
-          className={`w-full md:w-80 lg:w-96 flex-shrink-0 h-full border-r border-slate-800 ${
+          className={`w-full md:w-80 lg:w-[356px] flex-shrink-0 h-full rounded-[24px] md:rounded-[28px] glass overflow-hidden ${
             conversationId ? 'hidden md:flex' : 'flex'
           }`}
         >
@@ -79,10 +82,14 @@ export default function AppShell() {
             onStartDirectChat={handleStartDirectChat}
             onUpdateSettings={handleUpdateSettings}
             isLoading={isLoading}
+            isSearchModalOpen={isSearchModalOpen}
+            onSearchModalOpenChange={setIsSearchModalOpen}
+            isGroupModalOpen={isGroupModalOpen}
+            onGroupModalOpenChange={setIsGroupModalOpen}
           />
         </div>
 
-        {/* Main Chat Area - visible on desktop, or mobile when conversation is selected */}
+        {/* Main Chat Area (renders its own floating glass card + optional 3rd info glass card) */}
         <main
           className={`flex-1 h-full min-w-0 ${
             !conversationId ? 'hidden md:flex' : 'flex'
@@ -92,6 +99,8 @@ export default function AppShell() {
             conversationId={conversationId}
             onBack={handleBackToSidebar}
             currentUserId={user?.id}
+            onOpenNewChat={() => setIsSearchModalOpen(true)}
+            onOpenNewGroup={() => setIsGroupModalOpen(true)}
           />
         </main>
       </div>

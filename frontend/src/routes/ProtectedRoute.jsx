@@ -7,9 +7,11 @@ export default function ProtectedRoute() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-3 text-white">
-        <Spinner size="lg" />
-        <p className="text-sm text-slate-400">Loading Vanni...</p>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-ink">
+        <div className="p-6 rounded-3xl glass-strong flex flex-col items-center gap-3">
+          <Spinner size="lg" />
+          <p className="text-sm font-medium text-ink-muted">Loading Vanni...</p>
+        </div>
       </div>
     )
   }

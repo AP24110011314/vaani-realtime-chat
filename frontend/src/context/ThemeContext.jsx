@@ -37,6 +37,7 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     const root = document.documentElement
+    root.style.colorScheme = resolvedTheme
     if (resolvedTheme === 'dark') {
       root.classList.add('dark')
     } else {

@@ -7,8 +7,10 @@ export default function PublicOnlyRoute() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-3 text-white">
-        <Spinner size="lg" />
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-ink">
+        <div className="p-6 rounded-3xl glass-strong flex flex-col items-center gap-3">
+          <Spinner size="lg" />
+        </div>
       </div>
     )
   }

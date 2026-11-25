@@ -13,11 +13,25 @@ export default function AttachmentPreview({ attachments = [], isMine = false }) 
     .map((a) => ({ src: a.url, alt: a.fileName }))
 
   const getFileIcon = (mimeType = '') => {
-    if (mimeType.includes('pdf')) return <FileText className="w-5 h-5 text-rose-400 flex-shrink-0" />
-    if (mimeType.includes('zip') || mimeType.includes('tar') || mimeType.includes('compressed')) {
-      return <FileArchive className="w-5 h-5 text-amber-400 flex-shrink-0" />
+    if (mimeType.includes('pdf')) {
+      return (
+        <FileText
+          className={`w-5 h-5 flex-shrink-0 ${isMine ? 'text-current' : 'text-[var(--danger-text)]'}`}
+        />
+      )
     }
-    return <File className="w-5 h-5 text-indigo-400 flex-shrink-0" />
+    if (mimeType.includes('zip') || mimeType.includes('tar') || mimeType.includes('compressed')) {
+      return (
+        <FileArchive
+          className={`w-5 h-5 flex-shrink-0 ${isMine ? 'text-current' : 'text-[var(--warning-text)]'}`}
+        />
+      )
+    }
+    return (
+      <File
+        className={`w-5 h-5 flex-shrink-0 ${isMine ? 'text-current' : 'text-accent-text'}`}
+      />
+    )
   }
 
   return (
@@ -29,16 +43,16 @@ export default function AttachmentPreview({ attachments = [], isMine = false }) 
           if (isImage) {
             const imgIdx = imageAttachments.findIndex((img) => img.src === att.url)
             return (
-              <div key={att.id || att.url} className="relative group/att overflow-hidden rounded-xl">
+              <div key={att.id || att.url} className="relative group/att overflow-hidden rounded-2xl">
                 <button
                   type="button"
                   onClick={() => setActiveImageIndex(imgIdx >= 0 ? imgIdx : 0)}
-                  className="block cursor-pointer focus:outline-hidden"
+                  className="block cursor-pointer focus-accent rounded-2xl"
                 >
                   <img
                     src={att.url}
                     alt={att.fileName || 'Attachment image'}
-                    className="max-h-60 max-w-full rounded-xl object-cover hover:scale-[1.02] transition-transform duration-200 border border-slate-700/50"
+                    className="max-h-60 max-w-full rounded-2xl object-cover hover:scale-[1.02] transition-transform duration-200 border border-[var(--glass-border)]"
                     loading="lazy"
                   />
                 </button>
@@ -50,19 +64,23 @@ export default function AttachmentPreview({ attachments = [], isMine = false }) 
           return (
             <div
               key={att.id || att.url}
-              className={`flex items-center justify-between gap-3 p-2.5 rounded-xl border transition-colors ${
+              className={`flex items-center justify-between gap-3 p-2.5 rounded-2xl border transition-colors ${
                 isMine
-                  ? 'bg-indigo-700/40 border-indigo-500/50 hover:bg-indigo-700/60'
-                  : 'bg-slate-900/60 border-slate-700/60 hover:bg-slate-900/80'
+                  ? 'bg-black/10 border-white/20 hover:bg-black/15'
+                  : 'glass-subtle border-[var(--glass-border)] hover:bg-[var(--glass-bg-hover)] text-ink'
               }`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 {getFileIcon(att.mimeType)}
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-slate-100 truncate max-w-[180px] sm:max-w-[240px]">
+                  <p className="text-xs font-semibold truncate max-w-[180px] sm:max-w-[240px]">
                     {att.fileName}
                   </p>
-                  <p className="text-[10px] text-slate-400">
+                  <p
+                    className={`text-[10px] tabular-nums ${
+                      isMine ? 'opacity-80' : 'text-ink-muted'
+                    }`}
+                  >
                     {formatFileSize(att.size)}
                   </p>
                 </div>
@@ -73,7 +91,11 @@ export default function AttachmentPreview({ attachments = [], isMine = false }) 
                 download={att.fileName}
                 target="_blank"
                 rel="noreferrer"
-                className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-200 hover:text-white transition-colors flex-shrink-0"
+                className={`p-1.5 rounded-xl transition-colors flex-shrink-0 focus-accent ${
+                  isMine
+                    ? 'bg-black/15 hover:bg-black/25 text-current'
+                    : 'btn-glass text-ink'
+                }`}
                 title="Download file"
                 aria-label="Download file"
               >

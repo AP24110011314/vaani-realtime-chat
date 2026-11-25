@@ -21,39 +21,45 @@ export default function ConnectionBanner() {
 
   if (showBackOnline && status === 'connected') {
     return (
-      <div
-        role="status"
-        aria-live="polite"
-        className="bg-emerald-600/90 text-white text-xs font-medium px-4 py-1.5 flex items-center justify-center gap-2 shadow-xs transition-all animate-in fade-in slide-in-from-top-1"
-      >
-        <CheckCircle className="w-3.5 h-3.5" />
-        <span>Back online</span>
+      <div className="flex justify-center pt-1">
+        <div
+          role="status"
+          aria-live="polite"
+          className="glass-strong rounded-full px-4 py-1 text-xs font-semibold text-[var(--success-text)] border-[var(--success-border)] flex items-center gap-2 animate-msg-in"
+        >
+          <CheckCircle className="w-3.5 h-3.5" />
+          <span>Back online</span>
+        </div>
       </div>
     )
   }
 
   if (status === 'reconnecting') {
     return (
-      <div
-        role="status"
-        aria-live="polite"
-        className="bg-amber-600/90 text-amber-50 text-xs font-medium px-4 py-1.5 flex items-center justify-center gap-2 shadow-xs transition-all animate-in fade-in slide-in-from-top-1"
-      >
-        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-        <span>Reconnecting to server...</span>
+      <div className="flex justify-center pt-1">
+        <div
+          role="status"
+          aria-live="polite"
+          className="glass-strong rounded-full px-4 py-1 text-xs font-semibold text-[var(--warning-text)] border-[var(--warning-border)] flex items-center gap-2 animate-msg-in"
+        >
+          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+          <span>Reconnecting to server...</span>
+        </div>
       </div>
     )
   }
 
   if (status === 'offline' || status === 'disconnected') {
     return (
-      <div
-        role="status"
-        aria-live="polite"
-        className="bg-rose-600/90 text-rose-50 text-xs font-medium px-4 py-1.5 flex items-center justify-center gap-2 shadow-xs transition-all animate-in fade-in slide-in-from-top-1"
-      >
-        <WifiOff className="w-3.5 h-3.5" />
-        <span>Offline. Check your connection.</span>
+      <div className="flex justify-center pt-1">
+        <div
+          role="status"
+          aria-live="polite"
+          className="glass-strong rounded-full px-4 py-1 text-xs font-semibold text-[var(--danger-text)] border-[var(--danger-border)] flex items-center gap-2 animate-msg-in"
+        >
+          <WifiOff className="w-3.5 h-3.5" />
+          <span>Offline. Check your connection.</span>
+        </div>
       </div>
     )
   }

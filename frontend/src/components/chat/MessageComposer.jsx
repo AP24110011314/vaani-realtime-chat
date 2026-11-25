@@ -280,25 +280,25 @@ export default function MessageComposer({
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
-      className={`p-3 border-t border-slate-800 bg-slate-900/60 backdrop-blur relative transition-colors ${
-        isDragging ? 'bg-indigo-950/40 border-indigo-500' : ''
+      className={`px-3 sm:px-4 pb-3 pt-1.5 relative transition-colors ${
+        isDragging ? 'bg-[var(--accent-soft-bg)]' : ''
       }`}
     >
       {/* Drag & Drop Overlay */}
       {isDragging && (
-        <div className="absolute inset-0 bg-indigo-950/80 backdrop-blur-xs flex items-center justify-center border-2 border-dashed border-indigo-400 rounded-t-xl z-20 pointer-events-none">
-          <p className="text-sm font-semibold text-indigo-200">Drop files here to upload</p>
+        <div className="absolute inset-2 glass-strong flex items-center justify-center border-2 border-dashed border-[var(--accent-solid)] rounded-3xl z-20 pointer-events-none">
+          <p className="text-sm font-semibold text-accent-text">Drop files here to upload</p>
         </div>
       )}
 
       {/* Editing Message Banner */}
       {editingMessage && (
-        <div className="mb-2 p-2 px-3 rounded-xl bg-amber-950/60 border border-amber-700/60 text-xs flex items-center justify-between gap-2 animate-in fade-in">
+        <div className="mb-2 p-2.5 px-3.5 rounded-2xl glass-strong border-[var(--warning-border)] text-xs flex items-center justify-between gap-2 animate-msg-in">
           <div className="flex items-center gap-2 min-w-0">
-            <Pencil className="w-4 h-4 text-amber-400 flex-shrink-0" />
+            <Pencil className="w-4 h-4 text-[var(--warning-text)] flex-shrink-0" />
             <div className="min-w-0">
-              <span className="font-semibold text-amber-300 block">Editing message</span>
-              <span className="text-slate-400 truncate block text-[11px]">
+              <span className="font-semibold text-[var(--warning-text)] block">Editing message</span>
+              <span className="text-ink-muted truncate block text-[11px]">
                 {editingMessage.content}
               </span>
             </div>
@@ -306,7 +306,7 @@ export default function MessageComposer({
           <button
             type="button"
             onClick={onCancelEdit}
-            className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-amber-900/40 transition-colors"
+            className="p-1 text-ink-muted hover:text-ink rounded-xl hover:bg-[var(--glass-bg-hover)] transition-colors focus-accent cursor-pointer"
             title="Cancel editing"
             aria-label="Cancel editing"
           >
@@ -317,14 +317,14 @@ export default function MessageComposer({
 
       {/* Reply Preview Banner */}
       {replyTo && !editingMessage && (
-        <div className="mb-2 p-2 px-3 rounded-xl bg-indigo-950/60 border border-indigo-700/60 text-xs flex items-center justify-between gap-2 animate-in fade-in">
+        <div className="mb-2 p-2.5 px-3.5 rounded-2xl glass-strong border-[var(--accent-soft-border)] text-xs flex items-center justify-between gap-2 animate-msg-in">
           <div className="flex items-center gap-2 min-w-0">
-            <Reply className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+            <Reply className="w-4 h-4 text-accent-text flex-shrink-0" />
             <div className="min-w-0">
-              <span className="font-semibold text-indigo-300 block">
+              <span className="font-semibold text-accent-text block">
                 Replying to {replyTo.sender?.name || replyTo.senderName || 'message'}
               </span>
-              <span className="text-slate-400 truncate block text-[11px]">
+              <span className="text-ink-muted truncate block text-[11px]">
                 {replyTo.snippet || replyTo.content || 'Attachment'}
               </span>
             </div>
@@ -332,7 +332,7 @@ export default function MessageComposer({
           <button
             type="button"
             onClick={onCancelReply}
-            className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-indigo-900/40 transition-colors"
+            className="p-1 text-ink-muted hover:text-ink rounded-xl hover:bg-[var(--glass-bg-hover)] transition-colors focus-accent cursor-pointer"
             title="Cancel reply"
             aria-label="Cancel reply"
           >
@@ -343,7 +343,7 @@ export default function MessageComposer({
 
       {/* Error banner */}
       {composerError && (
-        <div role="alert" className="mb-2 p-2 rounded-xl bg-rose-950/80 border border-rose-800 text-rose-200 text-xs flex items-center gap-2 animate-in fade-in">
+        <div role="alert" className="mb-2 p-2.5 px-3.5 rounded-2xl glass-strong border-[var(--danger-border)] text-[var(--danger-text)] text-xs flex items-center gap-2 animate-msg-in">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           <span>{composerError}</span>
         </div>
@@ -357,10 +357,10 @@ export default function MessageComposer({
             return (
               <div
                 key={att.tempId}
-                className={`flex items-center gap-2 p-1.5 pr-2 rounded-xl border text-xs max-w-[200px] sm:max-w-[240px] shadow-xs ${
+                className={`flex items-center gap-2 p-1.5 pr-2 rounded-2xl text-xs max-w-[200px] sm:max-w-[240px] glass-subtle ${
                   att.error
-                    ? 'bg-rose-950/60 border-rose-800 text-rose-200'
-                    : 'bg-slate-900/80 border-slate-700/70 text-slate-200'
+                    ? 'border-[var(--danger-border)] text-[var(--danger-text)]'
+                    : 'text-ink'
                 }`}
               >
                 {/* Thumbnail or File Icon */}
@@ -368,16 +368,16 @@ export default function MessageComposer({
                   <img
                     src={att.previewUrl}
                     alt={att.name}
-                    className="w-8 h-8 rounded-lg object-cover flex-shrink-0 border border-slate-700"
+                    className="w-8 h-8 rounded-xl object-cover flex-shrink-0 border border-[var(--glass-border)]"
                   />
                 ) : (
-                  <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 rounded-xl glass-strong flex items-center justify-center flex-shrink-0">
                     {att.name.endsWith('.pdf') ? (
-                      <FileText className="w-4 h-4 text-rose-400" />
+                      <FileText className="w-4 h-4 text-[var(--danger-text)]" />
                     ) : att.name.endsWith('.zip') ? (
-                      <FileArchive className="w-4 h-4 text-amber-400" />
+                      <FileArchive className="w-4 h-4 text-[var(--warning-text)]" />
                     ) : (
-                      <File className="w-4 h-4 text-indigo-400" />
+                      <File className="w-4 h-4 text-accent-text" />
                     )}
                   </div>
                 )}
@@ -387,11 +387,11 @@ export default function MessageComposer({
                   <p className="truncate font-medium text-[11px] leading-tight">
                     {att.name}
                   </p>
-                  <p className="text-[10px] text-slate-400 leading-tight mt-0.5">
+                  <p className="text-[10px] text-ink-muted leading-tight mt-0.5 tabular-nums">
                     {att.isUploading ? (
-                      <span className="text-indigo-400 font-medium">Uploading {att.progress}%</span>
+                      <span className="text-accent-text font-medium">Uploading {att.progress}%</span>
                     ) : att.error ? (
-                      <span className="text-rose-400 truncate block">{att.error}</span>
+                      <span className="text-[var(--danger-text)] truncate block">{att.error}</span>
                     ) : (
                       formatFileSize(att.size)
                     )}
@@ -400,12 +400,12 @@ export default function MessageComposer({
 
                 {/* Status / Cancel Button */}
                 {att.isUploading ? (
-                  <Loader2 className="w-3.5 h-3.5 text-indigo-400 animate-spin flex-shrink-0" />
+                  <Loader2 className="w-3.5 h-3.5 text-accent-text animate-spin flex-shrink-0" />
                 ) : (
                   <button
                     type="button"
                     onClick={() => handleRemoveAttachment(att.tempId)}
-                    className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors flex-shrink-0"
+                    className="p-1 text-ink-muted hover:text-ink hover:bg-[var(--glass-bg-hover)] rounded-lg transition-colors flex-shrink-0 focus-accent cursor-pointer"
                     title="Remove attachment"
                     aria-label="Remove attachment"
                   >
@@ -418,8 +418,8 @@ export default function MessageComposer({
         </div>
       )}
 
-      {/* Input container */}
-      <div className="flex items-end gap-2 bg-slate-950/90 border border-slate-800 rounded-2xl p-1.5 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all relative">
+      {/* Floating Glass Pill Composer */}
+      <div className="flex items-end gap-1.5 glass-strong rounded-[26px] p-1.5 pl-2.5 focus-within:border-[var(--accent-solid)] focus-within:ring-2 focus-within:ring-[var(--accent-glow)] transition-all relative">
         {/* Hidden File Input */}
         <input
           ref={fileInputRef}
@@ -434,7 +434,7 @@ export default function MessageComposer({
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={disabled || isUploadingAny || Boolean(editingMessage)}
-          className="p-2 text-slate-400 hover:text-white hover:bg-slate-800/80 disabled:opacity-40 rounded-xl transition-colors flex-shrink-0 mb-0.5"
+          className="p-2 text-ink-muted hover:text-ink hover:bg-[var(--glass-bg-hover)] disabled:opacity-40 rounded-full transition-colors flex-shrink-0 mb-0.5 focus-accent cursor-pointer"
           title="Attach files (images, PDFs, documents up to 10MB)"
           aria-label="Attach files"
         >
@@ -447,7 +447,7 @@ export default function MessageComposer({
             type="button"
             onClick={() => setShowEmojiPicker((prev) => !prev)}
             disabled={disabled}
-            className="p-2 text-slate-400 hover:text-amber-400 hover:bg-slate-800/80 disabled:opacity-40 rounded-xl transition-colors"
+            className="p-2 text-ink-muted hover:text-ink hover:bg-[var(--glass-bg-hover)] disabled:opacity-40 rounded-full transition-colors focus-accent cursor-pointer"
             title="Insert emoji"
             aria-label="Insert emoji"
           >
@@ -455,13 +455,13 @@ export default function MessageComposer({
           </button>
 
           {showEmojiPicker && (
-            <div className="absolute bottom-full mb-2 left-0 w-64 p-2 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl z-30 grid grid-cols-6 gap-1">
+            <div className="absolute bottom-full mb-3 left-0 w-64 p-2.5 glass-strong rounded-3xl z-30 grid grid-cols-6 gap-1 animate-modal-in">
               {EMOJI_LIST.map((emoji) => (
                 <button
                   key={emoji}
                   type="button"
                   onClick={() => handleInsertEmoji(emoji)}
-                  className="p-1.5 text-base hover:bg-slate-800 rounded-lg hover:scale-125 transition-transform flex items-center justify-center"
+                  className="p-1.5 text-base hover:bg-[var(--glass-bg-hover)] rounded-xl hover:scale-125 transition-transform flex items-center justify-center cursor-pointer"
                 >
                   {emoji}
                 </button>
@@ -470,28 +470,31 @@ export default function MessageComposer({
           )}
         </div>
 
-        {/* Text Area */}
+        {/* Auto-growing Text Area (15px message text) */}
         <textarea
           ref={textareaRef}
           value={content}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          placeholder={editingMessage ? 'Edit your message...' : 'Type a message... (Press Enter to send, Shift+Enter for newline)'}
+          placeholder={editingMessage ? 'Edit your message...' : 'Type a message...'}
+          title="Press Enter to send, Shift+Enter for newline"
           rows={1}
           disabled={disabled}
-          className="flex-1 bg-transparent px-2 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none resize-none max-h-32 leading-relaxed"
+          className="flex-1 bg-transparent px-2 py-2 text-[15px] text-ink placeholder-[var(--text-muted-token)] focus:outline-none resize-none max-h-32 leading-snug"
         />
 
-        {/* Send Button */}
+        {/* Circular Gradient Send Button */}
         <button
           type="button"
           onClick={handleSend}
           disabled={!canSend}
-          className={`p-2.5 rounded-xl transition-all shadow-md flex-shrink-0 ${
+          className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-150 focus-accent cursor-pointer ${
             editingMessage
-              ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-600/20'
-              : 'bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:hover:bg-indigo-600 text-white shadow-indigo-600/20'
+              ? 'bg-amber-500 hover:bg-amber-400 text-[#15151C] shadow-md scale-100'
+              : canSend
+              ? 'btn-accent scale-100 opacity-100'
+              : 'glass-subtle text-ink-subtle opacity-45 scale-90 cursor-not-allowed'
           }`}
           aria-label={editingMessage ? 'Save edit' : 'Send message'}
           title={editingMessage ? 'Save edit' : 'Send message'}

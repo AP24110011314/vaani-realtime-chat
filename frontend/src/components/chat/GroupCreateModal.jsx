@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Search, Users, Loader2, Check } from 'lucide-react'
 import { userApi } from '../../api/userApi'
 import { conversationApi } from '../../api/conversationApi'
+import UserAvatar from '../common/UserAvatar'
 
 export default function GroupCreateModal({ isOpen, onClose, onCreated }) {
   const [title, setTitle] = useState('')
@@ -115,27 +117,32 @@ export default function GroupCreateModal({ isOpen, onClose, onCreated }) {
     }
   }
 
-  return (
+  const modal = (
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in"
+      onClick={handleClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-backdrop"
     >
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md glass-strong rounded-3xl overflow-hidden flex flex-col max-h-[90vh] animate-modal-in"
+      >
         {/* Header */}
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600/20 text-indigo-400 flex items-center justify-center">
+        <div className="px-5 py-4 border-b border-[var(--glass-border)] flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-2xl accent-badge flex items-center justify-center shadow-xs">
               <Users className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white">Create New Group</h3>
-              <p className="text-[11px] text-slate-400">At least 2 other members required</p>
+              <h3 className="text-sm font-bold text-ink">Create New Group</h3>
+              <p className="text-[11px] text-ink-muted">At least 2 other members required</p>
             </div>
           </div>
           <button
             onClick={handleClose}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+            className="p-1.5 text-ink-muted hover:text-ink hover:bg-[var(--glass-bg-hover)] rounded-xl transition-colors focus-accent cursor-pointer"
+            title="Close modal"
             aria-label="Close modal"
           >
             <X className="w-4 h-4" />
@@ -143,16 +150,16 @@ export default function GroupCreateModal({ isOpen, onClose, onCreated }) {
         </div>
 
         {/* Content */}
-        <form onSubmit={handleCreate} className="p-4 flex-1 overflow-y-auto space-y-3.5">
+        <form onSubmit={handleCreate} className="p-5 flex-1 overflow-y-auto space-y-4">
           {error && (
-            <div role="alert" className="p-2.5 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs">
+            <div role="alert" className="p-3 rounded-2xl bg-[var(--danger-bg)] border border-[var(--danger-border)] text-[var(--danger-text)] text-xs">
               {error}
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1">
-              Group Name <span className="text-rose-400">*</span>
+            <label className="block text-xs font-semibold text-ink-muted mb-1.5">
+              Group Name <span className="text-[var(--danger-text)]">*</span>
             </label>
             <input
               type="text"
@@ -161,12 +168,12 @@ export default function GroupCreateModal({ isOpen, onClose, onCreated }) {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Design Team, Book Club"
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              className="glass-input w-full rounded-2xl px-3.5 py-2 text-xs"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-ink-muted mb-1.5">
               Description (Optional)
             </label>
             <input
@@ -175,33 +182,36 @@ export default function GroupCreateModal({ isOpen, onClose, onCreated }) {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What is this group about?"
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              className="glass-input w-full rounded-2xl px-3.5 py-2 text-xs"
             />
           </div>
 
           {/* Selected Member Chips */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-medium text-slate-300">
+              <label className="text-xs font-semibold text-ink-muted">
                 Selected Members ({selectedMembers.length})
               </label>
               {selectedMembers.length < 2 && (
-                <span className="text-[10px] text-amber-400">Add {2 - selectedMembers.length} more</span>
+                <span className="text-[10px] font-medium text-[var(--warning-text)]">
+                  Add {2 - selectedMembers.length} more
+                </span>
               )}
             </div>
 
             {selectedMembers.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5 p-2 bg-slate-950/80 border border-slate-800 rounded-xl max-h-24 overflow-y-auto">
+              <div className="flex flex-wrap gap-1.5 p-2.5 glass-subtle rounded-2xl max-h-24 overflow-y-auto">
                 {selectedMembers.map((m) => (
                   <span
                     key={m.id}
-                    className="inline-flex items-center gap-1 bg-indigo-600/30 border border-indigo-500/40 text-indigo-200 text-[11px] px-2 py-0.5 rounded-full"
+                    className="inline-flex items-center gap-1.5 bg-[var(--accent-soft-bg)] border border-[var(--accent-soft-border)] text-accent-text text-[11px] font-medium px-2.5 py-0.5 rounded-full"
                   >
                     <span>{m.name}</span>
                     <button
                       type="button"
                       onClick={() => handleRemoveMember(m.id)}
-                      className="hover:text-rose-300"
+                      className="hover:text-[var(--danger-text)] cursor-pointer"
+                      aria-label={`Remove ${m.name}`}
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -209,30 +219,30 @@ export default function GroupCreateModal({ isOpen, onClose, onCreated }) {
                 ))}
               </div>
             ) : (
-              <p className="text-[11px] text-slate-500 italic">No members selected yet.</p>
+              <p className="text-[11px] text-ink-subtle italic">No members selected yet.</p>
             )}
           </div>
 
           {/* Member Search */}
           <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1">Add Members</label>
+            <label className="block text-xs font-semibold text-ink-muted mb-1.5">Add Members</label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-subtle pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={handleSearchChange}
                 placeholder="Search users by name or email..."
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                className="glass-input w-full rounded-full pl-9 pr-8 py-2 text-xs"
               />
               {isSearching && (
-                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-indigo-400 animate-spin" />
+                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-accent-text animate-spin" />
               )}
             </div>
 
             {/* Results list */}
             {searchResults.length > 0 && (
-              <div className="mt-2 border border-slate-800 rounded-xl overflow-hidden max-h-36 overflow-y-auto divide-y divide-slate-800/60 bg-slate-950/60">
+              <div className="mt-2 glass-subtle rounded-2xl overflow-hidden max-h-36 overflow-y-auto divide-y divide-[var(--glass-border)]">
                 {searchResults.map((u) => {
                   const isSelected = selectedMembers.some((m) => m.id === u.id)
                   return (
@@ -240,20 +250,18 @@ export default function GroupCreateModal({ isOpen, onClose, onCreated }) {
                       key={u.id}
                       type="button"
                       onClick={() => handleToggleMember(u)}
-                      className={`w-full flex items-center justify-between p-2 text-left hover:bg-slate-800/60 transition-colors ${
-                        isSelected ? 'bg-indigo-950/40' : ''
+                      className={`w-full flex items-center justify-between p-2.5 text-left hover:bg-[var(--glass-bg-hover)] transition-colors cursor-pointer ${
+                        isSelected ? 'bg-[var(--accent-soft-bg)]' : ''
                       }`}
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-7 h-7 rounded-full bg-indigo-600/30 text-indigo-300 flex items-center justify-center text-xs font-bold">
-                          {u.name?.charAt(0).toUpperCase()}
-                        </div>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <UserAvatar src={u.avatarUrl} name={u.name} seed={u.id || u.email} size="sm" />
                         <div className="min-w-0">
-                          <p className="text-xs font-medium text-slate-200 truncate">{u.name}</p>
-                          <p className="text-[10px] text-slate-400 truncate">{u.email || u.about}</p>
+                          <p className="text-xs font-semibold text-ink truncate">{u.name}</p>
+                          <p className="text-[10px] text-ink-muted truncate">{u.email || u.about}</p>
                         </div>
                       </div>
-                      {isSelected && <Check className="w-4 h-4 text-indigo-400" />}
+                      {isSelected && <Check className="w-4 h-4 text-accent-text" />}
                     </button>
                   )
                 })}
@@ -262,18 +270,18 @@ export default function GroupCreateModal({ isOpen, onClose, onCreated }) {
           </div>
 
           {/* Footer Submit */}
-          <div className="pt-2 flex justify-end gap-2 border-t border-slate-800/80">
+          <div className="pt-3 flex justify-end gap-2 border-t border-[var(--glass-border)]">
             <button
               type="button"
               onClick={handleClose}
-              className="px-3.5 py-1.5 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"
+              className="px-4 py-2 text-xs font-semibold btn-glass rounded-full cursor-pointer focus-accent"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isCreating || selectedMembers.length < 2 || !title.trim()}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
+              className="flex items-center gap-1.5 px-5 py-2 btn-accent disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold rounded-full cursor-pointer focus-accent"
             >
               {isCreating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               <span>Create Group</span>
@@ -283,4 +291,6 @@ export default function GroupCreateModal({ isOpen, onClose, onCreated }) {
       </div>
     </div>
   )
+
+  return typeof document !== 'undefined' ? createPortal(modal, document.body) : modal
 }

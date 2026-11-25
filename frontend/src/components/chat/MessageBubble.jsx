@@ -1,22 +1,23 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { formatTime } from '../../lib/formatters'
 import {
   Clock,
-  AlertCircle,
   Check,
   CheckCheck,
-  Reply,
-  Smile,
+  AlertCircle,
+  Copy,
   Pencil,
   Trash2,
-  Copy,
+  Reply,
+  Smile,
   Info,
 } from 'lucide-react'
 import AttachmentPreview from './AttachmentPreview'
 
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏']
 
-function renderContentWithLinks(text) {
+function renderContentWithLinks(text, isMine) {
   if (!text) return null
   const urlRegex = /(https?:\/\/[^\s]+)/g
   const parts = text.split(urlRegex)
@@ -29,7 +30,11 @@ function renderContentWithLinks(text) {
           href={part}
           target="_blank"
           rel="noopener noreferrer nofollow"
-          className="underline text-indigo-200 dark:text-indigo-300 hover:text-white break-all"
+          className={`underline break-all font-medium ${
+            isMine
+              ? 'opacity-95 hover:opacity-100'
+              : 'text-accent-text hover:opacity-80'
+          }`}
           onClick={(e) => e.stopPropagation()}
         >
           {part}
@@ -43,8 +48,10 @@ function renderContentWithLinks(text) {
 export default function MessageBubble({
   message,
   isMine,
-  isGroup,
-  isGroupAdmin,
+  isGroup = false,
+  isGroupAdmin = false,
+  isGroupedWithPrev = false,
+  isGroupedWithNext = false,
   onRetry,
   onShowReceipts,
   onReply,
@@ -85,39 +92,49 @@ export default function MessageBubble({
 
   if (isSystem) {
     return (
-      <div className="flex justify-center my-2 select-text">
-        <span className="text-[11px] font-medium bg-slate-800/80 dark:bg-slate-800/80 text-slate-400 px-3 py-1 rounded-full border border-slate-700/50 shadow-xs">
+      <div className="flex justify-center my-2.5 select-text">
+        <span className="text-[11px] font-medium glass-subtle text-ink-muted px-3.5 py-1 rounded-full">
           {message.content}
         </span>
       </div>
     )
   }
 
+  const tailRadiusClass = isMine
+    ? !isGroupedWithNext
+      ? 'rounded-[20px] rounded-br-[6px]'
+      : 'rounded-[20px]'
+    : !isGroupedWithPrev
+    ? 'rounded-[20px] rounded-tl-[6px]'
+    : 'rounded-[20px]'
+
   return (
     <div
       id={`msg-${message.id}`}
-      className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} mb-2 group relative transition-colors`}
+      className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} ${
+        isGroupedWithNext ? 'mb-0.5' : 'mb-3'
+      } group relative animate-msg-in`}
     >
-      {/* Sender name for group chats */}
-      {isGroup && !isMine && message.sender?.name && (
-        <span className="text-[11px] font-semibold text-indigo-400 mb-0.5 ml-1">
+      {/* Sender name for group chats (only first bubble of consecutive run) */}
+      {isGroup && !isMine && !isGroupedWithPrev && message.sender?.name && (
+        <span className="text-[11px] font-semibold text-accent-text mb-1 ml-2">
           {message.sender.name}
         </span>
       )}
 
-      {/* Floating Action Menu (appears on hover) */}
+      {/* Floating Glass Action Menu */}
       {!isDeleted && !isPending && !isFailed && (
         <div
-          className={`opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity absolute -top-3 ${
-            isMine ? 'right-2' : 'left-2'
-          } z-10 flex items-center bg-slate-900 border border-slate-700/80 rounded-full px-1.5 py-0.5 shadow-md shadow-black/40 gap-0.5 text-slate-300`}
+          className={`opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity absolute -top-7 ${
+            isMine ? 'right-1' : 'left-1'
+          } z-10 flex items-center glass-strong rounded-full px-1.5 py-0.5 gap-0.5 text-ink-muted`}
         >
           {/* Quick Reaction Bar Popover Toggle */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setShowEmojiPicker((prev) => !prev)}
-              className="p-1 hover:text-amber-400 hover:bg-slate-800 rounded-full transition-colors"
+              className="p-1.5 hover:text-ink hover:bg-[var(--glass-bg-hover)] rounded-full transition-colors focus-accent cursor-pointer"
               title="React"
               aria-label="React to message"
             >
@@ -126,9 +143,9 @@ export default function MessageBubble({
 
             {showEmojiPicker && (
               <div
-                className={`absolute bottom-full mb-1 ${
+                className={`absolute bottom-full mb-1.5 ${
                   isMine ? 'right-0' : 'left-0'
-                } flex items-center gap-1 p-1 bg-slate-900 border border-slate-700 rounded-full shadow-xl z-30`}
+                } flex items-center gap-1 p-1.5 glass-strong rounded-full z-30 animate-modal-in`}
               >
                 {QUICK_EMOJIS.map((emoji) => (
                   <button
@@ -138,7 +155,7 @@ export default function MessageBubble({
                       onToggleReaction?.(message, emoji)
                       setShowEmojiPicker(false)
                     }}
-                    className="p-1 hover:scale-125 transition-transform text-sm"
+                    className="p-1 hover:scale-125 transition-transform text-sm cursor-pointer"
                     aria-label={`React with ${emoji}`}
                   >
                     {emoji}
@@ -152,7 +169,7 @@ export default function MessageBubble({
           <button
             type="button"
             onClick={() => onReply?.(message)}
-            className="p-1 hover:text-indigo-400 hover:bg-slate-800 rounded-full transition-colors"
+            className="p-1.5 hover:text-accent-text hover:bg-[var(--glass-bg-hover)] rounded-full transition-colors focus-accent cursor-pointer"
             title="Reply"
             aria-label="Reply to message"
           >
@@ -164,11 +181,15 @@ export default function MessageBubble({
             <button
               type="button"
               onClick={handleCopy}
-              className="p-1 hover:text-white hover:bg-slate-800 rounded-full transition-colors"
+              className="p-1.5 hover:text-ink hover:bg-[var(--glass-bg-hover)] rounded-full transition-colors focus-accent cursor-pointer"
               title={copied ? 'Copied!' : 'Copy text'}
               aria-label={copied ? 'Copied' : 'Copy text'}
             >
-              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              {copied ? (
+                <Check className="w-3.5 h-3.5 text-[var(--success-text)]" />
+              ) : (
+                <Copy className="w-3.5 h-3.5" />
+              )}
             </button>
           )}
 
@@ -177,7 +198,7 @@ export default function MessageBubble({
             <button
               type="button"
               onClick={() => onEdit?.(message)}
-              className="p-1 hover:text-amber-400 hover:bg-slate-800 rounded-full transition-colors"
+              className="p-1.5 hover:text-[var(--warning-text)] hover:bg-[var(--glass-bg-hover)] rounded-full transition-colors focus-accent cursor-pointer"
               title="Edit message"
               aria-label="Edit message"
             >
@@ -190,7 +211,7 @@ export default function MessageBubble({
             <button
               type="button"
               onClick={() => setShowDeleteConfirm(true)}
-              className="p-1 hover:text-rose-400 hover:bg-slate-800 rounded-full transition-colors"
+              className="p-1.5 hover:text-[var(--danger-text)] hover:bg-[var(--glass-bg-hover)] rounded-full transition-colors focus-accent cursor-pointer"
               title="Delete message"
               aria-label="Delete message"
             >
@@ -203,7 +224,7 @@ export default function MessageBubble({
             <button
               type="button"
               onClick={() => onShowReceipts?.(message)}
-              className="p-1 hover:text-sky-400 hover:bg-slate-800 rounded-full transition-colors"
+              className="p-1.5 hover:text-accent-text hover:bg-[var(--glass-bg-hover)] rounded-full transition-colors focus-accent cursor-pointer"
               title="Message info"
               aria-label="Message info"
             >
@@ -215,22 +236,22 @@ export default function MessageBubble({
 
       {/* Main Bubble Body */}
       <div
-        className={`max-w-[85%] sm:max-w-[70%] px-3.5 py-2 rounded-2xl break-words text-sm shadow-sm transition-all ${
+        className={`max-w-[85%] sm:max-w-[70%] px-3.5 py-2.5 ${tailRadiusClass} break-words text-[15px] transition-all ${
           isMine
             ? isFailed
-              ? 'bg-rose-950/80 border border-rose-800 text-rose-200 rounded-tr-xs'
-              : 'bg-indigo-600 text-white rounded-tr-xs'
-            : 'bg-slate-800/90 text-slate-100 border border-slate-700/50 rounded-tl-xs'
+              ? 'bg-[var(--danger-bg)] border border-[var(--danger-border)] text-[var(--danger-text)]'
+              : 'bubble-sent'
+            : 'bubble-received'
         } ${isPending ? 'opacity-70' : ''}`}
       >
         {/* Quoted Reply snippet */}
         {message.replyTo && (
           <div
             onClick={() => onJumpToMessage?.(message.replyTo.id)}
-            className={`mb-1.5 text-xs px-2.5 py-1 rounded-lg border-l-2 cursor-pointer hover:opacity-90 transition-opacity ${
+            className={`mb-1.5 text-xs px-2.5 py-1.5 rounded-xl border-l-2 cursor-pointer hover:opacity-90 transition-opacity ${
               isMine
-                ? 'bg-indigo-700/60 border-white/60 text-indigo-100'
-                : 'bg-slate-900/60 border-indigo-400 text-slate-300'
+                ? 'bg-black/15 border-current/60'
+                : 'bg-[var(--glass-bg-subtle)] border-[var(--accent-solid)] text-ink'
             }`}
             title="Click to jump to quoted message"
           >
@@ -252,30 +273,30 @@ export default function MessageBubble({
         {(!isDeleted && message.content) || isDeleted ? (
           <p className="whitespace-pre-wrap leading-relaxed select-text">
             {isDeleted ? (
-              <span className="italic text-xs opacity-70">
+              <span className="italic text-xs opacity-75">
                 This message was deleted
               </span>
             ) : (
-              renderContentWithLinks(message.content)
+              renderContentWithLinks(message.content, isMine)
             )}
           </p>
         ) : null}
 
-        {/* Footer timestamp & status indicators */}
+        {/* Footer timestamp & status indicators inside bubble bottom-right */}
         <div
-          className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${
-            isMine ? 'text-indigo-200/80' : 'text-slate-400'
+          className={`flex items-center justify-end gap-1 mt-1 text-[10px] tabular-nums ${
+            isMine && !isFailed ? 'text-[var(--bubble-sent-meta)]' : 'text-ink-subtle'
           }`}
         >
           {message.editedAt && !isDeleted && (
-            <span className="text-[9px] italic opacity-75">edited</span>
+            <span className="text-[9px] italic opacity-85">edited</span>
           )}
           <span>{formatTime(message.createdAt)}</span>
           {isPending && <Clock className="w-3 h-3 animate-spin" />}
           {isFailed && (
             <button
               onClick={() => onRetry?.(message)}
-              className="flex items-center gap-0.5 text-rose-300 hover:underline"
+              className="flex items-center gap-0.5 text-[var(--danger-text)] font-semibold hover:underline cursor-pointer"
               title="Failed to send. Click to retry."
             >
               <AlertCircle className="w-3 h-3" />
@@ -296,11 +317,14 @@ export default function MessageBubble({
               }
             >
               {isRead ? (
-                <CheckCheck className="w-3.5 h-3.5 text-sky-300" aria-label="Read" />
+                <CheckCheck
+                  className="w-3.5 h-3.5 text-sky-200 dark:text-[#031416] opacity-100"
+                  aria-label="Read"
+                />
               ) : isDelivered ? (
-                <CheckCheck className="w-3.5 h-3.5 text-indigo-200/80" aria-label="Delivered" />
+                <CheckCheck className="w-3.5 h-3.5 opacity-65" aria-label="Delivered" />
               ) : (
-                <Check className="w-3.5 h-3.5 text-indigo-200/80" aria-label="Sent" />
+                <Check className="w-3.5 h-3.5 opacity-65" aria-label="Sent" />
               )}
             </button>
           )}
@@ -315,56 +339,60 @@ export default function MessageBubble({
               key={r.emoji}
               type="button"
               onClick={() => onToggleReaction?.(message, r.emoji)}
-              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors ${
+              className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs transition-all cursor-pointer focus-accent ${
                 r.reactedByMe
-                  ? 'bg-indigo-900/60 border-indigo-500 text-indigo-200 font-semibold shadow-xs'
-                  : 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:bg-slate-700/80'
+                  ? 'glass-strong border-[var(--accent-soft-border)] text-accent-text font-semibold'
+                  : 'glass-subtle text-ink hover:bg-[var(--glass-bg-hover)]'
               }`}
               title={`${r.count} reaction${r.count > 1 ? 's' : ''}`}
             >
               <span>{r.emoji}</span>
-              <span className="text-[11px]">{r.count}</span>
+              <span className="text-[11px] tabular-nums">{r.count}</span>
             </button>
           ))}
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-in fade-in"
-          onClick={() => setShowDeleteConfirm(false)}
-        >
-          <div
-            className="bg-slate-900 border border-slate-700 rounded-2xl p-5 max-w-sm w-full shadow-2xl text-slate-100"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-base font-bold text-white mb-2">Delete message?</h3>
-            <p className="text-xs text-slate-400 mb-4 leading-relaxed">
-              This message will be deleted for everyone in this conversation. Any attachments will be permanently removed.
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
+      {/* Delete Confirmation Glass Modal */}
+      {showDeleteConfirm &&
+        (typeof document !== 'undefined'
+          ? createPortal(
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center glass-modal-backdrop p-4"
                 onClick={() => setShowDeleteConfirm(false)}
-                className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
               >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowDeleteConfirm(false)
-                  onDelete?.(message)
-                }}
-                className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white transition-colors"
-              >
-                Delete for everyone
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+                <div
+                  className="glass-strong rounded-3xl p-6 max-w-sm w-full text-ink animate-modal-in"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <h3 className="text-base font-bold text-ink mb-2">Delete message?</h3>
+                  <p className="text-xs text-ink-muted mb-5 leading-relaxed">
+                    This message will be deleted for everyone in this conversation. Any attachments will be permanently removed.
+                  </p>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowDeleteConfirm(false)}
+                      className="px-4 py-2 rounded-full text-xs font-semibold btn-glass cursor-pointer focus-accent"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDeleteConfirm(false)
+                        onDelete?.(message)
+                      }}
+                      className="px-4 py-2 rounded-full text-xs font-semibold bg-[var(--danger-solid)] hover:brightness-110 text-white transition-all active:scale-95 cursor-pointer focus-accent"
+                    >
+                      Delete for everyone
+                    </button>
+                  </div>
+                </div>
+              </div>,
+              document.body
+            )
+          : null)}
     </div>
   )
 }

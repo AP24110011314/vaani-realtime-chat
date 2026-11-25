@@ -20,7 +20,7 @@ const Input = forwardRef(function Input(
       {label && (
         <label
           htmlFor={inputId}
-          className="text-xs font-semibold text-slate-300 uppercase tracking-wider"
+          className="text-xs font-semibold text-ink-muted uppercase tracking-wider"
         >
           {label}
         </label>
@@ -33,26 +33,30 @@ const Input = forwardRef(function Input(
           type={type}
           aria-invalid={error ? 'true' : undefined}
           aria-describedby={error ? `${inputId}-error` : helperText ? `${inputId}-helper` : undefined}
-          className={`w-full bg-slate-900 border rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 transition-all duration-150 ${
+          className={`w-full glass-input rounded-2xl px-4 py-2.5 text-sm ${
             error
-              ? 'border-rose-500/70 focus:ring-rose-500/40 focus:border-rose-500'
-              : 'border-slate-700/80 focus:ring-indigo-500/40 focus:border-indigo-500'
+              ? 'border-[var(--danger-border)] focus:border-[var(--danger-solid)]'
+              : ''
           } ${rightElement ? 'pr-11' : ''} ${className}`}
           {...props}
         />
         {rightElement && (
-          <div className="absolute right-3 flex items-center text-slate-400 hover:text-slate-200">
+          <div className="absolute right-3 flex items-center text-ink-muted hover:text-ink">
             {rightElement}
           </div>
         )}
       </div>
 
       {error && (
-        <p id={`${inputId}-error`} role="alert" className="text-xs text-rose-400 font-medium mt-0.5">{error}</p>
+        <p id={`${inputId}-error`} role="alert" className="text-xs text-[var(--danger-text)] font-medium mt-0.5">
+          {error}
+        </p>
       )}
 
       {helperText && !error && (
-        <p id={`${inputId}-helper`} className="text-xs text-slate-500 mt-0.5">{helperText}</p>
+        <p id={`${inputId}-helper`} className="text-xs text-ink-subtle mt-0.5">
+          {helperText}
+        </p>
       )}
     </div>
   )

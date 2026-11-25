@@ -4,6 +4,7 @@ import { ThemeProvider } from './context/ThemeContext'
 import { AuthProvider } from './context/AuthContext'
 import { SocketProvider } from './context/SocketContext'
 import AppRoutes from './routes/AppRoutes'
+import GlassBackdrop from './components/common/GlassBackdrop'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -18,10 +19,13 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
+        <GlassBackdrop />
         <BrowserRouter>
           <AuthProvider>
             <SocketProvider>
-              <AppRoutes />
+              <div className="relative z-10 min-h-screen">
+                <AppRoutes />
+              </div>
             </SocketProvider>
           </AuthProvider>
         </BrowserRouter>

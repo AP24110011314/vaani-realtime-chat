@@ -1,4 +1,5 @@
 import { useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Download, ChevronLeft, ChevronRight } from 'lucide-react'
 
 export default function ImageLightbox({
@@ -35,9 +36,9 @@ export default function ImageLightbox({
 
   if (!currentSrc) return null
 
-  return (
+  const modal = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 select-none animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 select-none animate-modal-in"
       onClick={onClose}
     >
       <div
@@ -47,7 +48,7 @@ export default function ImageLightbox({
         {/* Top actions & Counter */}
         <div className="absolute top-3 right-3 flex items-center gap-2 z-10">
           {hasMultiple && (
-            <span className="px-3 py-1 bg-slate-900/80 text-white text-xs font-semibold rounded-full border border-slate-700/60 shadow-lg">
+            <span className="px-3 py-1 bg-black/65 text-[#F5F5F7] text-xs font-semibold rounded-full border border-white/15 backdrop-blur-md tabular-nums">
               {currentIndex + 1} / {images.length}
             </span>
           )}
@@ -56,7 +57,7 @@ export default function ImageLightbox({
             download={currentAlt || 'download'}
             target="_blank"
             rel="noreferrer"
-            className="p-2 bg-slate-900/80 hover:bg-slate-800 text-white rounded-full transition-colors border border-slate-700/60 shadow-lg"
+            className="p-2 bg-black/65 hover:bg-black/80 text-[#F5F5F7] rounded-full transition-colors border border-white/15 backdrop-blur-md focus-accent"
             title="Download image"
             aria-label="Download image"
           >
@@ -64,7 +65,7 @@ export default function ImageLightbox({
           </a>
           <button
             onClick={onClose}
-            className="p-2 bg-slate-900/80 hover:bg-slate-800 text-white rounded-full transition-colors border border-slate-700/60 shadow-lg"
+            className="p-2 bg-black/65 hover:bg-black/80 text-[#F5F5F7] rounded-full transition-colors border border-white/15 backdrop-blur-md focus-accent cursor-pointer"
             title="Close"
             aria-label="Close"
           >
@@ -76,7 +77,7 @@ export default function ImageLightbox({
         {hasMultiple && currentIndex > 0 && (
           <button
             onClick={onPrev}
-            className="absolute left-3 top-1/2 -translate-y-1/2 p-2.5 bg-slate-900/80 hover:bg-slate-800 text-white rounded-full transition-colors border border-slate-700/60 shadow-lg z-10"
+            className="absolute left-3 top-1/2 -translate-y-1/2 p-2.5 bg-black/65 hover:bg-black/80 text-[#F5F5F7] rounded-full transition-colors border border-white/15 backdrop-blur-md z-10 focus-accent cursor-pointer"
             title="Previous image (Left arrow)"
             aria-label="Previous image"
           >
@@ -88,7 +89,7 @@ export default function ImageLightbox({
         {hasMultiple && currentIndex < images.length - 1 && (
           <button
             onClick={onNext}
-            className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 bg-slate-900/80 hover:bg-slate-800 text-white rounded-full transition-colors border border-slate-700/60 shadow-lg z-10"
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 bg-black/65 hover:bg-black/80 text-[#F5F5F7] rounded-full transition-colors border border-white/15 backdrop-blur-md z-10 focus-accent cursor-pointer"
             title="Next image (Right arrow)"
             aria-label="Next image"
           >
@@ -100,14 +101,16 @@ export default function ImageLightbox({
         <img
           src={currentSrc}
           alt={currentAlt}
-          className="max-h-[85vh] max-w-full rounded-lg object-contain shadow-2xl border border-slate-800"
+          className="max-h-[85vh] max-w-full rounded-2xl object-contain shadow-2xl border border-white/10"
         />
         {currentAlt && (
-          <p className="mt-2 text-xs text-slate-300 font-medium truncate max-w-md bg-slate-900/80 px-3 py-1 rounded-full border border-slate-800">
+          <p className="mt-3 text-xs text-[#F5F5F7] font-medium truncate max-w-md bg-black/65 px-3.5 py-1 rounded-full border border-white/15 backdrop-blur-md">
             {currentAlt}
           </p>
         )}
       </div>
     </div>
   )
+
+  return typeof document !== 'undefined' ? createPortal(modal, document.body) : modal
 }

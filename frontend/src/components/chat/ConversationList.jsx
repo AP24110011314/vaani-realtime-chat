@@ -1,5 +1,5 @@
 import ConversationItem from './ConversationItem'
-import { MessageSquarePlus } from 'lucide-react'
+import { SearchX } from 'lucide-react'
 
 export default function ConversationList({
   conversations = [],
@@ -9,19 +9,20 @@ export default function ConversationList({
   isLoading,
   currentUserId,
   onUpdateSettings,
+  hasSearchQuery = false,
 }) {
   if (isLoading) {
     return (
-      <div className="space-y-2 p-3">
-        {[1, 2, 3, 4].map((i) => (
+      <div className="space-y-2 p-2.5">
+        {[1, 2, 3, 4, 5].map((i) => (
           <div
             key={i}
-            className="flex items-center gap-3.5 p-3 rounded-xl bg-slate-800/30 animate-pulse"
+            className="flex items-center gap-3.5 p-3 rounded-2xl glass-subtle"
           >
-            <div className="w-12 h-12 rounded-full bg-slate-700/60 flex-shrink-0" />
+            <div className="w-11 h-11 rounded-full glass-skeleton flex-shrink-0" />
             <div className="flex-1 space-y-2">
-              <div className="h-4 bg-slate-700/60 rounded w-1/2" />
-              <div className="h-3 bg-slate-700/40 rounded w-3/4" />
+              <div className="h-3.5 glass-skeleton rounded-full w-1/2" />
+              <div className="h-2.5 glass-skeleton rounded-full w-3/4" />
             </div>
           </div>
         ))}
@@ -30,18 +31,41 @@ export default function ConversationList({
   }
 
   if (conversations.length === 0) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-400">
-        <div className="w-14 h-14 rounded-2xl bg-slate-800/60 flex items-center justify-center text-slate-400 mb-4 border border-slate-700/40">
-          <MessageSquarePlus className="w-7 h-7 text-indigo-400" />
+    if (hasSearchQuery) {
+      return (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+          <div className="relative w-14 h-14 rounded-2xl glass-strong flex items-center justify-center mb-4">
+            <SearchX className="w-6 h-6 text-accent-text" />
+          </div>
+          <h3 className="text-sm font-semibold text-ink mb-1">No matching chats</h3>
+          <p className="text-xs text-ink-muted max-w-[210px] leading-relaxed">
+            No conversations match your filter. Try a different name or search inside messages.
+          </p>
         </div>
-        <h3 className="text-sm font-semibold text-slate-200 mb-1">No conversations yet</h3>
-        <p className="text-xs text-slate-400 mb-5 max-w-[200px]">
+      )
+    }
+
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+        {/* Layered floating glass illustration */}
+        <div className="relative w-24 h-20 mb-4 flex items-center justify-center" aria-hidden="true">
+          <div className="absolute left-1 top-1 w-14 h-10 rounded-2xl rounded-bl-sm glass-strong animate-float-slow flex items-center justify-center gap-1 px-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-solid)]" />
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-solid)] opacity-70" />
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-solid)] opacity-45" />
+          </div>
+          <div className="absolute right-1 bottom-1 w-14 h-10 rounded-2xl rounded-br-sm accent-badge shadow-md animate-float-delayed flex items-center justify-center">
+            <span className="w-6 h-1.5 rounded-full bg-current opacity-85" />
+          </div>
+        </div>
+        <h3 className="text-sm font-bold text-ink mb-1">No conversations yet</h3>
+        <p className="text-xs text-ink-muted mb-5 max-w-[210px] leading-relaxed">
           Start a direct chat with your friends or team members.
         </p>
         <button
+          type="button"
           onClick={onOpenNewChat}
-          className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors shadow-lg shadow-indigo-600/20"
+          className="px-4 py-2 rounded-full btn-accent text-xs font-semibold cursor-pointer focus-accent"
         >
           Start a Chat
         </button>
@@ -50,7 +74,7 @@ export default function ConversationList({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-2 space-y-1">
+    <div className="flex-1 overflow-y-auto p-2.5 space-y-2">
       {conversations.map((conv) => (
         <ConversationItem
           key={conv.id}

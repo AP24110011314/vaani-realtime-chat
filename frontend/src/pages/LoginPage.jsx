@@ -6,6 +6,7 @@ import * as z from 'zod'
 import { useAuth } from '../hooks/useAuth'
 import Input from '../components/common/Input'
 import Button from '../components/common/Button'
+import VanniLogo from '../components/common/VanniLogo'
 import { Eye, EyeOff, AlertCircle } from 'lucide-react'
 
 const loginSchema = z.object({
@@ -44,36 +45,33 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8 text-white">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <Link to="/" className="inline-flex items-center gap-2 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-600/30">
-            V
-          </div>
-          <span className="text-2xl font-bold tracking-tight">Vanni</span>
-        </Link>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-100">
-          Sign in to your account
-        </h1>
-        <p className="mt-2 text-sm text-slate-400">
-          Don't have an account?{' '}
-          <Link
-            to="/register"
-            className="font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
-          >
-            Create one for free
+    <main className="min-h-screen flex flex-col justify-center py-12 px-4 sm:px-6 text-ink">
+      <div className="mx-auto w-full max-w-[440px]">
+        <div className="text-center mb-7">
+          <Link to="/" className="inline-flex items-center mb-5 focus-accent rounded-2xl">
+            <VanniLogo size="lg" />
           </Link>
-        </p>
-      </div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-ink heading-tight">
+            Sign in to your account
+          </h1>
+          <p className="mt-2 text-sm text-ink-muted">
+            Don't have an account?{' '}
+            <Link
+              to="/register"
+              className="font-semibold text-accent-text hover:underline transition-colors"
+            >
+              Create one for free
+            </Link>
+          </p>
+        </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md px-4 sm:px-0">
-        <div className="bg-slate-900 border border-slate-800 py-8 px-6 shadow-2xl rounded-2xl sm:px-10">
+        <div className="glass-strong rounded-[28px] py-8 px-6 sm:px-9 animate-modal-in">
           {serverError && (
             <div
               role="alert"
-              className="mb-6 p-4 rounded-xl bg-rose-950/60 border border-rose-800/60 text-rose-300 text-sm flex items-center gap-3"
+              className="mb-6 p-3.5 rounded-2xl bg-[var(--danger-bg)] border border-[var(--danger-border)] text-[var(--danger-text)] text-sm flex items-center gap-3"
             >
-              <AlertCircle className="w-5 h-5 shrink-0 text-rose-400" />
+              <AlertCircle className="w-5 h-5 shrink-0" />
               <span>{serverError}</span>
             </div>
           )}
@@ -100,7 +98,8 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="p-1 hover:text-white transition-colors cursor-pointer"
+                  className="p-1.5 text-ink-subtle hover:text-ink rounded-xl transition-colors cursor-pointer focus-accent"
+                  title={showPassword ? 'Hide password' : 'Show password'}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? (
@@ -116,7 +115,7 @@ export default function LoginPage() {
             <Button
               type="submit"
               loading={isSubmitting}
-              className="w-full mt-2"
+              className="w-full mt-2 rounded-full"
             >
               Sign In
             </Button>
