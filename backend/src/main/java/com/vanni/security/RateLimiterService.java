@@ -25,6 +25,7 @@ public class RateLimiterService {
     private final Map<Long, Bucket> searchBuckets = new ConcurrentHashMap<>();
     private final Map<Long, Bucket> messageSendBuckets = new ConcurrentHashMap<>();
     private final Map<Long, Bucket> uploadBuckets = new ConcurrentHashMap<>();
+    private final Map<Long, Bucket> mentionAllBuckets = new ConcurrentHashMap<>();
 
     // 5 attempts per minute per key (IP + email), plus exponential lockout after repeated failures
     public boolean tryConsumeLogin(String key) {
@@ -95,6 +96,14 @@ public class RateLimiterService {
     public boolean tryConsumeUpload(Long userId) {
         Bucket bucket = uploadBuckets.computeIfAbsent(userId, k -> Bucket.builder()
             .addLimit(Bandwidth.builder().capacity(20).refillIntervally(20, Duration.ofHours(1)).build())
+            .build());
+        return bucket.tryConsume(1);
+    }
+
+    // 1 @all mention per 5 minutes per group
+    public boolean tryConsumeMentionAll(Long conversationId) {
+        Bucket bucket = mentionAllBuckets.computeIfAbsent(conversationId, k -> Bucket.builder()
+            .addLimit(Bandwidth.builder().capacity(1).refillIntervally(1, Duration.ofMinutes(5)).build())
             .build());
         return bucket.tryConsume(1);
     }

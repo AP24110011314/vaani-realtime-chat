@@ -1,7 +1,7 @@
 import { useEffect, useRef, useLayoutEffect, useState, useMemo, useCallback } from 'react'
 import MessageBubble from './MessageBubble'
 import { formatMessageDateGroup } from '../../lib/formatters'
-import { Loader2, ArrowDown } from 'lucide-react'
+import { Loader2, ArrowDown, AtSign } from 'lucide-react'
 
 // Imperative highlight helpers — avoids setState-in-effect entirely
 const HIGHLIGHT_CLASSES = [
@@ -48,14 +48,21 @@ export default function MessageList({
   onToggleReaction,
   onSendQuickReply,
   highlightedMessageId,
+  onMentionClick,
 }) {
   const containerRef = useRef(null)
   const previousScrollHeightRef = useRef(0)
   const isInitialLoadRef = useRef(true)
   const prevLastMessageKeyRef = useRef(null)
   const [showScrollBottomPill, setShowScrollBottomPill] = useState(false)
+  const [mentionCycleIdx, setMentionCycleIdx] = useState(0)
   const currentHighlightRef = useRef(null)
   const highlightTimerRef = useRef(null)
+
+  const mentionMessageIds = useMemo(() => {
+    if (!isGroup) return []
+    return messages.filter((m) => m.mentionsMe && !m.deleted && m.id).map((m) => m.id)
+  }, [isGroup, messages])
 
   const firstUnreadIndex = useMemo(() => {
     if (!unreadCount || unreadCount <= 0 || messages.length === 0) return -1
@@ -304,23 +311,41 @@ export default function MessageList({
                 onDelete={onDelete}
                 onToggleReaction={onToggleReaction}
                 onJumpToMessage={jumpToMessage}
+                onMentionClick={onMentionClick}
               />
             </div>
           )
         })}
       </div>
 
-      {/* Floating Jump to Latest Glass Pill */}
-      {showScrollBottomPill && (
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20">
-          <button
-            type="button"
-            onClick={scrollToBottom}
-            className="flex items-center gap-1.5 px-4 py-1.5 glass-strong hover:bg-[var(--glass-bg-hover)] text-ink text-xs font-semibold rounded-full transition-transform active:scale-95 animate-msg-in cursor-pointer focus-accent"
-          >
-            <ArrowDown className="w-3.5 h-3.5 text-accent-text" />
-            <span>Jump to latest</span>
-          </button>
+      {/* Floating Jump Pills */}
+      {(showScrollBottomPill || mentionMessageIds.length > 0) && (
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2">
+          {mentionMessageIds.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                const idx = mentionCycleIdx % mentionMessageIds.length
+                jumpToMessage(mentionMessageIds[idx])
+                setMentionCycleIdx((idx + 1) % mentionMessageIds.length)
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 glass-strong border-[var(--accent-soft-border)] hover:bg-[var(--glass-bg-hover)] text-accent-text text-xs font-semibold rounded-full transition-transform active:scale-95 animate-msg-in cursor-pointer focus-accent"
+              title="Jump to next mention"
+            >
+              <AtSign className="w-3.5 h-3.5" />
+              <span>Jump to mention</span>
+            </button>
+          )}
+          {showScrollBottomPill && (
+            <button
+              type="button"
+              onClick={scrollToBottom}
+              className="flex items-center gap-1.5 px-4 py-1.5 glass-strong hover:bg-[var(--glass-bg-hover)] text-ink text-xs font-semibold rounded-full transition-transform active:scale-95 animate-msg-in cursor-pointer focus-accent"
+            >
+              <ArrowDown className="w-3.5 h-3.5 text-accent-text" />
+              <span>Jump to latest</span>
+            </button>
+          )}
         </div>
       )}
     </div>

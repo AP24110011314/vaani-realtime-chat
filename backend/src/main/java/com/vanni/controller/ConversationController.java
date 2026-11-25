@@ -7,6 +7,7 @@ import com.vanni.dto.request.CreateGroupRequest;
 import com.vanni.dto.request.SetRoleRequest;
 import com.vanni.dto.request.UpdateGroupRequest;
 import com.vanni.dto.response.ConversationDto;
+import com.vanni.dto.response.UserSummaryResponse;
 import com.vanni.security.CurrentUser;
 import com.vanni.security.UserPrincipal;
 import com.vanni.service.ConversationService;
@@ -139,5 +140,14 @@ public class ConversationController {
             @PathVariable Long id
     ) {
         return conversationService.serveGroupAvatar(id, principal.id());
+    }
+
+    @GetMapping("/{id}/mentionable")
+    public ResponseEntity<List<UserSummaryResponse>> getMentionable(
+            @CurrentUser UserPrincipal principal,
+            @PathVariable Long id,
+            @RequestParam(required = false, defaultValue = "") String query
+    ) {
+        return ResponseEntity.ok(conversationService.getMentionableMembers(id, principal.id(), query));
     }
 }

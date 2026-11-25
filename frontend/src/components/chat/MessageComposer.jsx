@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
   SendHorizonal,
   Paperclip,
@@ -11,9 +11,12 @@ import {
   Smile,
   Reply,
   Pencil,
+  AtSign,
 } from 'lucide-react'
 import { attachmentApi } from '../../api/attachmentApi'
+import { conversationApi } from '../../api/conversationApi'
 import { formatFileSize } from '../../lib/formatters'
+import MentionPicker from './MentionPicker'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 const MAX_MESSAGE_LENGTH = 4000
@@ -27,6 +30,48 @@ const EMOJI_LIST = [
   '✨', '👋', '🙌', '👀', '💡', '✅',
 ]
 
+function escapeRegExp(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * Hydrate raw <@id> tokens into readable @Name text when editing a message.
+ */
+function hydrateMentionsForEdit(rawContent, mentions = []) {
+  if (!rawContent) return { text: '', map: new Map() }
+  const map = new Map()
+  const byId = new Map((mentions || []).map((m) => [String(m.userId), m.name]))
+  const text = rawContent.replace(/<@(\d+|all)>/g, (full, token) => {
+    if (token === 'all') {
+      return '@all'
+    }
+    const name = byId.get(token)
+    if (!name) return full
+    map.set(name, Number(token))
+    return `@${name}`
+  })
+  return { text, map }
+}
+
+/**
+ * Convert selected @Name mentions back to <@id> / <@all> wire tokens before send/edit.
+ */
+function encodeMentionsForWire(text, mentionMap, allowAll) {
+  if (!text) return text
+  let out = text
+  if (allowAll) {
+    out = out.replace(/(^|\s)@all(?=$|[\s.,!?;:)\]}])/g, '$1<@all>')
+  }
+  if (mentionMap && mentionMap.size > 0) {
+    const entries = Array.from(mentionMap.entries()).sort((a, b) => b[0].length - a[0].length)
+    for (const [name, id] of entries) {
+      const pattern = new RegExp(`(^|\\s)@${escapeRegExp(name)}(?=$|[\\s.,!?;:)\\]}])`, 'g')
+      out = out.replace(pattern, `$1<@${id}>`)
+    }
+  }
+  return out
+}
+
 export default function MessageComposer({
   onSendMessage,
   onKeyStroke,
@@ -37,6 +82,11 @@ export default function MessageComposer({
   editingMessage,
   onCancelEdit,
   onSaveEdit,
+  conversationId,
+  isGroup = false,
+  isGroupAdmin = false,
+  groupMembers = [],
+  currentUserId,
 }) {
   const [content, setContent] = useState('')
   const [attachments, setAttachments] = useState([]) // Array of { tempId, file, progress, error, dto }
@@ -44,16 +94,26 @@ export default function MessageComposer({
   const [composerError, setComposerError] = useState(null)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
 
+  // Mention picker state
+  const [mentionTrigger, setMentionTrigger] = useState(null) // { start, end, query }
+  const [remoteMembers, setRemoteMembers] = useState(null)
+  const [isLoadingMentions, setIsLoadingMentions] = useState(false)
+  const [mentionIndex, setMentionIndex] = useState(0)
+  const [selectedMentionsMap, setSelectedMentionsMap] = useState(() => new Map())
+
   const textareaRef = useRef(null)
   const fileInputRef = useRef(null)
   const dragCounterRef = useRef(0)
   const abortControllersRef = useRef(new Map())
 
-  // Populate content if editing message
+  // Populate content & mention map if editing message
   const [prevEditingMessage, setPrevEditingMessage] = useState(editingMessage)
   if (editingMessage !== prevEditingMessage) {
     setPrevEditingMessage(editingMessage)
-    setContent(editingMessage?.content || '')
+    const { text, map } = hydrateMentionsForEdit(editingMessage?.content || '', editingMessage?.mentions)
+    setContent(text)
+    setSelectedMentionsMap(map)
+    setMentionTrigger(null)
   }
 
   useEffect(() => {
@@ -84,6 +144,115 @@ export default function MessageComposer({
       return () => clearTimeout(timer)
     }
   }, [composerError])
+
+  // Fetch mentionable members from backend when trigger is active
+  useEffect(() => {
+    if (!isGroup || !mentionTrigger || !conversationId) {
+      return
+    }
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      setIsLoadingMentions(true)
+      try {
+        const list = await conversationApi.getMentionable(conversationId, mentionTrigger.query)
+        if (!cancelled) {
+          setRemoteMembers(Array.isArray(list) ? list : [])
+        }
+      } catch {
+        if (!cancelled) setRemoteMembers(null)
+      } finally {
+        if (!cancelled) setIsLoadingMentions(false)
+      }
+    }, 100)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [isGroup, mentionTrigger, conversationId])
+
+  const mentionSuggestions = useMemo(() => {
+    if (!isGroup || !mentionTrigger) return []
+    const q = mentionTrigger.query.toLowerCase()
+    const baseMembers = Array.isArray(remoteMembers)
+      ? remoteMembers
+      : (groupMembers || []).filter(
+          (m) => m.id !== currentUserId && (!q || m.name?.toLowerCase().startsWith(q))
+        )
+    const list = baseMembers.slice(0, 8)
+    if (isGroupAdmin && ('all'.startsWith(q) || q === '')) {
+      return [{ id: 'all', name: 'all' }, ...list].slice(0, 8)
+    }
+    return list
+  }, [isGroup, mentionTrigger, remoteMembers, groupMembers, currentUserId, isGroupAdmin])
+
+  const activeMentionChips = useMemo(() => {
+    if (!isGroup || !content) return []
+    const chips = []
+    for (const [name, id] of selectedMentionsMap.entries()) {
+      const pattern = new RegExp(`(^|\\s)@${escapeRegExp(name)}(?=$|[\\s.,!?;:)\\]}])`)
+      if (pattern.test(content)) {
+        chips.push({ id, name })
+      }
+    }
+    if (isGroupAdmin && /(^|\s)@all(?=$|[\s.,!?;:)\]}])/.test(content)) {
+      chips.unshift({ id: 'all', name: 'all' })
+    }
+    return chips
+  }, [isGroup, content, selectedMentionsMap, isGroupAdmin])
+
+  const updateMentionTrigger = useCallback(
+    (text, cursorPos) => {
+      if (!isGroup) {
+        setMentionTrigger(null)
+        return
+      }
+      const pos = typeof cursorPos === 'number' ? cursorPos : text.length
+      const beforeCursor = text.slice(0, pos)
+      const match = beforeCursor.match(/(?:^|\s)@([^\s@]{0,30})$/)
+      if (match) {
+        const atIdx = beforeCursor.lastIndexOf('@')
+        setMentionTrigger({ start: atIdx, end: pos, query: match[1] })
+        setMentionIndex(0)
+        setRemoteMembers(null)
+      } else {
+        setMentionTrigger(null)
+      }
+    },
+    [isGroup]
+  )
+
+  const handleSelectMention = useCallback(
+    (item) => {
+      if (!mentionTrigger) return
+      const label = item.id === 'all' ? 'all' : item.name
+      const before = content.slice(0, mentionTrigger.start)
+      const after = content.slice(mentionTrigger.end)
+      const insertion = `@${label} `
+      const nextContent = `${before}${insertion}${after}`
+      const nextCursor = before.length + insertion.length
+
+      if (item.id !== 'all') {
+        setSelectedMentionsMap((prev) => {
+          const next = new Map(prev)
+          next.set(item.name, item.id)
+          return next
+        })
+      }
+
+      setContent(nextContent)
+      setMentionTrigger(null)
+      setRemoteMembers(null)
+
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.selectionStart = nextCursor
+          textareaRef.current.selectionEnd = nextCursor
+          textareaRef.current.focus()
+        }
+      }, 0)
+    },
+    [mentionTrigger, content]
+  )
 
   const handleUploadFile = useCallback(async (file) => {
     if (file.size > MAX_FILE_SIZE) {
@@ -197,32 +366,38 @@ export default function MessageComposer({
 
   const handleSend = () => {
     const trimmed = content.trim()
+    const wireContent = isGroup
+      ? encodeMentionsForWire(trimmed, selectedMentionsMap, isGroupAdmin)
+      : trimmed
     const uploadedDtos = attachments.map((a) => a.dto).filter(Boolean)
     const attachmentIds = uploadedDtos.map((d) => d.id)
 
-    if (trimmed.length > MAX_MESSAGE_LENGTH) {
+    if (wireContent.length > MAX_MESSAGE_LENGTH) {
       setComposerError('Message exceeds the 4,000-character limit.')
       return
     }
 
     if (editingMessage) {
-      if (trimmed) {
-        onSaveEdit?.(editingMessage.id, trimmed)
+      if (wireContent) {
+        onSaveEdit?.(editingMessage.id, wireContent)
         setContent('')
+        setSelectedMentionsMap(new Map())
       }
       return
     }
 
-    if (!trimmed && attachmentIds.length === 0) return
+    if (!wireContent && attachmentIds.length === 0) return
 
     if (replyTo?.id) {
-      onSendMessage(trimmed, attachmentIds, replyTo.id)
+      onSendMessage(wireContent, attachmentIds, replyTo.id)
     } else {
-      onSendMessage(trimmed, attachmentIds)
+      onSendMessage(wireContent, attachmentIds)
     }
 
     setContent('')
     setAttachments([])
+    setSelectedMentionsMap(new Map())
+    setMentionTrigger(null)
     onStopTyping?.()
     if (replyTo) onCancelReply?.()
 
@@ -233,11 +408,35 @@ export default function MessageComposer({
   }
 
   const handleKeyDown = (e) => {
+    if (mentionTrigger && mentionSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setMentionIndex((prev) => (prev + 1) % mentionSuggestions.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setMentionIndex((prev) => (prev - 1 + mentionSuggestions.length) % mentionSuggestions.length)
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        handleSelectMention(mentionSuggestions[mentionIndex] || mentionSuggestions[0])
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setMentionTrigger(null)
+        return
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()
     } else if (e.key === 'Escape') {
-      if (editingMessage) onCancelEdit?.()
+      if (mentionTrigger) setMentionTrigger(null)
+      else if (editingMessage) onCancelEdit?.()
       else if (replyTo) onCancelReply?.()
       else if (showEmojiPicker) setShowEmojiPicker(false)
     }
@@ -246,6 +445,7 @@ export default function MessageComposer({
   const handleChange = (e) => {
     const val = e.target.value
     setContent(val)
+    updateMentionTrigger(val, e.target.selectionStart)
     if (composerError && val.trim().length <= MAX_MESSAGE_LENGTH && composerError.includes('4,000-character')) {
       setComposerError(null)
     }
@@ -327,7 +527,7 @@ export default function MessageComposer({
             <div className="min-w-0">
               <span className="font-semibold text-[var(--warning-text)] block">Editing message</span>
               <span className="text-ink-muted truncate block text-[11px]">
-                {editingMessage.content}
+                {editingMessage.previewText || editingMessage.content}
               </span>
             </div>
           </div>
@@ -353,7 +553,7 @@ export default function MessageComposer({
                 Replying to {replyTo.sender?.name || replyTo.senderName || 'message'}
               </span>
               <span className="text-ink-muted truncate block text-[11px]">
-                {replyTo.snippet || replyTo.content || 'Attachment'}
+                {replyTo.snippet || replyTo.previewText || replyTo.content || 'Attachment'}
               </span>
             </div>
           </div>
@@ -377,6 +577,24 @@ export default function MessageComposer({
         </div>
       )}
 
+      {/* Active Mention Chips Indicator */}
+      {activeMentionChips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 mb-1.5 px-1">
+          <span className="text-[10px] font-semibold text-ink-subtle flex items-center gap-1">
+            <AtSign className="w-3 h-3 text-accent-text" />
+            Mentioning:
+          </span>
+          {activeMentionChips.map((chip) => (
+            <span
+              key={String(chip.id)}
+              className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--accent-soft-bg)] text-accent-text border border-[var(--accent-soft-border)]"
+            >
+              @{chip.name}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Attachment Chips Preview */}
       {attachments.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-2 p-1 max-h-36 overflow-y-auto">
@@ -391,7 +609,6 @@ export default function MessageComposer({
                     : 'text-ink'
                 }`}
               >
-                {/* Thumbnail or File Icon */}
                 {isImage && att.previewUrl ? (
                   <img
                     src={att.previewUrl}
@@ -410,7 +627,6 @@ export default function MessageComposer({
                   </div>
                 )}
 
-                {/* Details & Progress */}
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium text-[11px] leading-tight">
                     {att.name}
@@ -426,7 +642,6 @@ export default function MessageComposer({
                   </p>
                 </div>
 
-                {/* Status / Cancel Button */}
                 {att.isUploading ? (
                   <Loader2 className="w-3.5 h-3.5 text-accent-text animate-spin flex-shrink-0" />
                 ) : (
@@ -448,6 +663,15 @@ export default function MessageComposer({
 
       {/* Floating Glass Pill Composer */}
       <div className="flex items-end gap-1.5 glass-strong rounded-[26px] p-1.5 pl-2.5 focus-within:border-[var(--accent-solid)] focus-within:ring-2 focus-within:ring-[var(--accent-glow)] transition-all relative">
+        {/* Mention Picker Popover */}
+        <MentionPicker
+          isOpen={Boolean(isGroup && mentionTrigger)}
+          items={mentionSuggestions}
+          activeIndex={mentionIndex}
+          onSelect={handleSelectMention}
+          isLoading={isLoadingMentions}
+        />
+
         {/* Hidden File Input */}
         <input
           ref={fileInputRef}
@@ -505,7 +729,13 @@ export default function MessageComposer({
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          placeholder={editingMessage ? 'Edit your message...' : 'Type a message...'}
+          placeholder={
+            editingMessage
+              ? 'Edit your message...'
+              : isGroup
+              ? 'Message... (@ to mention)'
+              : 'Type a message...'
+          }
           title="Press Enter to send, Shift+Enter for newline"
           rows={1}
           disabled={disabled}

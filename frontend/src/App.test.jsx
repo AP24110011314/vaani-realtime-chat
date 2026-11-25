@@ -950,7 +950,9 @@ describe('Phase 5 Groups, Presence & System Messages', () => {
       fireEvent.click(menuBtn)
 
       expect(screen.getByText('Unpin chat')).toBeInTheDocument()
-      expect(screen.getByText('Unmute chat')).toBeInTheDocument()
+      expect(screen.getByText('Off (Muted)')).toBeInTheDocument()
+      expect(screen.getByText('All messages')).toBeInTheDocument()
+      expect(screen.getByText('Mentions only')).toBeInTheDocument()
       expect(screen.getByText('Archive chat')).toBeInTheDocument()
 
       fireEvent.click(screen.getByText('Unpin chat'))
@@ -1144,6 +1146,141 @@ describe('Phase 5 Groups, Presence & System Messages', () => {
         </QueryClientProvider>
       )
       expect(screen.getByRole('button', { name: /Change group avatar/i })).toBeInTheDocument()
+    })
+  })
+
+  describe('Phase 11 @Mentions in Groups', () => {
+    it('MessageComposer opens MentionPicker on @ in groups, converts chip to <@id>, and blocks @all for non-admins', () => {
+      const onSend = vi.fn()
+      const members = [
+        { id: 1, name: 'Asha', role: 'MEMBER' },
+        { id: 2, name: 'Ravi Patel', role: 'MEMBER' },
+      ]
+
+      const { rerender } = render(
+        <MessageComposer
+          onSendMessage={onSend}
+          conversationId={55}
+          isGroup={true}
+          isGroupAdmin={false}
+          groupMembers={members}
+          currentUserId={1}
+        />
+      )
+
+      const textarea = screen.getByPlaceholderText(/@ to mention/i)
+      fireEvent.change(textarea, { target: { value: 'Hey @Rav', selectionStart: 8 } })
+
+      // Picker shows Ravi Patel, but NOT @all for non-admin
+      const listbox = screen.getByRole('listbox', { name: /Mention suggestions/i })
+      expect(listbox).toHaveTextContent('Ravi Patel')
+      expect(listbox).not.toHaveTextContent('@all')
+
+      fireEvent.keyDown(textarea, { key: 'Enter', code: 'Enter' })
+      expect(textarea.value).toBe('Hey @Ravi Patel ')
+
+      fireEvent.keyDown(textarea, { key: 'Enter', code: 'Enter' })
+      expect(onSend).toHaveBeenCalledWith('Hey <@2>', [])
+
+      // Admin sees @all option
+      rerender(
+        <MessageComposer
+          onSendMessage={onSend}
+          conversationId={55}
+          isGroup={true}
+          isGroupAdmin={true}
+          groupMembers={members}
+          currentUserId={1}
+        />
+      )
+      fireEvent.change(textarea, { target: { value: '@', selectionStart: 1 } })
+      expect(screen.getByRole('listbox', { name: /Mention suggestions/i })).toHaveTextContent('@all')
+    })
+
+    it('MessageBubble renders mention pills safely (XSS protected), skips code spans, and highlights mentionsMe', () => {
+      const onMentionClick = vi.fn()
+      const msg = {
+        id: 700,
+        content: 'Ping <@2> and `<@2>` and <@all>',
+        mentions: [{ userId: 2, name: '<img src=x onerror=alert(1)>Ravi' }],
+        mentionsAll: true,
+        mentionsMe: true,
+        sender: { id: 1, name: 'Asha' },
+        createdAt: new Date().toISOString(),
+      }
+
+      const { container } = render(
+        <MessageBubble
+          message={msg}
+          isMine={false}
+          isGroup={true}
+          onMentionClick={onMentionClick}
+        />
+      )
+
+      const mentionBtn = screen.getByRole('button', { name: /@<img src=x onerror=alert\(1\)>Ravi/i })
+      expect(mentionBtn).toBeInTheDocument()
+      expect(container.querySelector('img')).toBeNull() // XSS rendered as text only
+      expect(screen.getByText('@all')).toBeInTheDocument()
+      expect(screen.getByText('`<@2>`')).toBeInTheDocument()
+
+      fireEvent.click(mentionBtn)
+      expect(onMentionClick).toHaveBeenCalledWith(2)
+    })
+
+    it('ConversationItem renders @ badge for unread mentions and updates notifyMode, and Sidebar filters Mentions tab', () => {
+      const queryClient = createTestQueryClient()
+      const mockUpdateSettings = vi.fn()
+      const convs = [
+        {
+          id: 1,
+          type: 'GROUP',
+          title: 'Core Team',
+          unreadCount: 2,
+          mentionUnreadCount: 1,
+          notifyMode: 'MENTIONS',
+          muted: false,
+          members: [],
+        },
+        {
+          id: 2,
+          type: 'GROUP',
+          title: 'Random',
+          unreadCount: 4,
+          mentionUnreadCount: 0,
+          notifyMode: 'ALL',
+          muted: false,
+          members: [],
+        },
+      ]
+
+      render(
+        <MemoryRouter>
+          <QueryClientProvider client={queryClient}>
+            <AuthContext.Provider value={{ user: { id: 1, name: 'Asha', email: 'asha@vanni.app' }, logout: vi.fn() }}>
+              <Sidebar
+                conversations={convs}
+                activeId={null}
+                onSelectConversation={vi.fn()}
+                onStartDirectChat={vi.fn()}
+                onUpdateSettings={mockUpdateSettings}
+              />
+            </AuthContext.Provider>
+          </QueryClientProvider>
+        </MemoryRouter>
+      )
+
+      expect(screen.getByLabelText('Unread mentions')).toHaveTextContent('@')
+
+      // Open options menu on Core Team and switch to Off (Muted)
+      fireEvent.click(screen.getAllByLabelText('Chat options')[0])
+      fireEvent.click(screen.getByText('Off (Muted)'))
+      expect(mockUpdateSettings).toHaveBeenCalledWith(1, { notifyMode: 'NONE' })
+
+      // Click Mentions tab in Sidebar -> shows only Core Team
+      fireEvent.click(screen.getByTitle('Conversations with unread @mentions'))
+      expect(screen.getByText('Core Team')).toBeInTheDocument()
+      expect(screen.queryByText('Random')).not.toBeInTheDocument()
     })
   })
 })

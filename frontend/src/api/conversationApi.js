@@ -58,4 +58,10 @@ export const conversationApi = {
     })
     return res.data
   },
+  getMentionable: async (id, query = '') => {
+    const res = await http.get(`/conversations/${id}/mentionable`, {
+      params: { query },
+    })
+    return res.data
+  },
 }

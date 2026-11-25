@@ -67,10 +67,33 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
     long countUnread(@Param("convId") Long convId, @Param("lastReadId") Long lastReadId, @Param("userId") Long userId);
 
     @Query("""
+        SELECT COUNT(m) FROM Message m
+        WHERE m.conversation.id = :convId
+          AND (:lastReadId IS NULL OR m.id > :lastReadId)
+          AND m.sender.id != :userId
+          AND m.deletedAt IS NULL
+          AND (
+              m.mentionsAll = TRUE
+              OR EXISTS (
+                  SELECT 1 FROM MessageMention mm
+                  WHERE mm.id.messageId = m.id AND mm.id.userId = :userId
+              )
+          )
+    """)
+    long countUnreadMentions(@Param("convId") Long convId, @Param("lastReadId") Long lastReadId, @Param("userId") Long userId);
+
+    @Query("""
         SELECT m FROM Message m
         WHERE m.conversation.id = :convId
           AND m.deletedAt IS NULL
-          AND LOWER(m.content) LIKE :pattern
+          AND (
+              LOWER(m.content) LIKE :pattern
+              OR EXISTS (
+                  SELECT 1 FROM MessageMention mm
+                  WHERE mm.id.messageId = m.id AND LOWER(mm.user.name) LIKE :pattern
+              )
+              OR (m.mentionsAll = TRUE AND :matchAll = TRUE)
+          )
           AND EXISTS (
               SELECT 1 FROM ConversationMember cm
               WHERE cm.conversation.id = :convId
@@ -83,13 +106,21 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
         @Param("convId") Long convId,
         @Param("userId") Long userId,
         @Param("pattern") String pattern,
+        @Param("matchAll") boolean matchAll,
         Pageable pageable
     );
 
     @Query("""
         SELECT m FROM Message m
         WHERE m.deletedAt IS NULL
-          AND LOWER(m.content) LIKE :pattern
+          AND (
+              LOWER(m.content) LIKE :pattern
+              OR EXISTS (
+                  SELECT 1 FROM MessageMention mm
+                  WHERE mm.id.messageId = m.id AND LOWER(mm.user.name) LIKE :pattern
+              )
+              OR (m.mentionsAll = TRUE AND :matchAll = TRUE)
+          )
           AND m.conversation.id IN (
               SELECT cm.conversation.id FROM ConversationMember cm
               WHERE cm.user.id = :userId
@@ -100,6 +131,7 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
     List<Message> searchAcrossConversations(
         @Param("userId") Long userId,
         @Param("pattern") String pattern,
+        @Param("matchAll") boolean matchAll,
         Pageable pageable
     );
 }

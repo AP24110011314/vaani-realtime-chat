@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { conversationApi } from '../../api/conversationApi'
 import { messageApi } from '../../api/messageApi'
@@ -9,7 +10,8 @@ import MessageList from './MessageList'
 import MessageComposer from './MessageComposer'
 import GroupInfoPanel from './GroupInfoPanel'
 import MessageReceiptModal from './MessageReceiptModal'
-import { ShieldAlert, SquarePen, Users } from 'lucide-react'
+import UserAvatar from '../common/UserAvatar'
+import { ShieldAlert, SquarePen, Users, X } from 'lucide-react'
 
 export default function ChatWindow({
   conversationId,
@@ -29,6 +31,7 @@ export default function ChatWindow({
   const [replyTo, setReplyTo] = useState(null)
   const [editingMessage, setEditingMessage] = useState(null)
   const [highlightedMessageId, setHighlightedMessageId] = useState(null)
+  const [selectedMentionMember, setSelectedMentionMember] = useState(null)
   const [prevConversationId, setPrevConversationId] = useState(conversationId)
   const pendingTimersRef = useRef(new Map())
 
@@ -41,6 +44,7 @@ export default function ChatWindow({
     setReplyTo(null)
     setEditingMessage(null)
     setHighlightedMessageId(null)
+    setSelectedMentionMember(null)
   }
 
   // Register active conversation with socket for events & catch-up
@@ -404,6 +408,12 @@ export default function ChatWindow({
           onToggleReaction={handleToggleReaction}
           onSendQuickReply={(text) => handleSendMessage(text)}
           highlightedMessageId={highlightedMessageId}
+          onMentionClick={(userId) => {
+            const member = conversation?.members?.find((m) => m.id === userId)
+            if (member) {
+              setSelectedMentionMember(member)
+            }
+          }}
           onBottomStateChange={setIsChatAtBottom}
           onNearBottom={() => {
             const isFocused = typeof document !== 'undefined' && (typeof document.hasFocus !== 'function' || document.hasFocus())
@@ -423,6 +433,11 @@ export default function ChatWindow({
           editingMessage={editingMessage}
           onCancelEdit={() => setEditingMessage(null)}
           onSaveEdit={handleSaveEdit}
+          conversationId={conversationId}
+          isGroup={conversation?.type === 'GROUP'}
+          isGroupAdmin={isGroupAdmin}
+          groupMembers={conversation?.members || []}
+          currentUserId={currentUserId}
         />
       </div>
 
@@ -446,6 +461,52 @@ export default function ChatWindow({
           message={receiptModalMessage}
         />
       )}
+
+      {selectedMentionMember && typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center glass-modal-backdrop p-4"
+            onClick={() => setSelectedMentionMember(null)}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Member info"
+              className="glass-strong rounded-3xl p-6 max-w-xs w-full text-ink animate-modal-in relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={() => setSelectedMentionMember(null)}
+                className="absolute right-4 top-4 p-1.5 text-ink-muted hover:text-ink rounded-xl hover:bg-[var(--glass-bg-hover)] transition-colors focus-accent cursor-pointer"
+                aria-label="Close member info"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <div className="flex flex-col items-center text-center gap-3">
+                <UserAvatar
+                  src={selectedMentionMember.avatarUrl}
+                  name={selectedMentionMember.name}
+                  seed={selectedMentionMember.id || selectedMentionMember.name}
+                  size="lg"
+                  isOnline={selectedMentionMember.online}
+                />
+                <div>
+                  <h3 className="text-base font-bold text-ink">{selectedMentionMember.name}</h3>
+                  {selectedMentionMember.role === 'ADMIN' && (
+                    <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[var(--accent-soft-bg)] text-accent-text border border-[var(--accent-soft-border)]">
+                      Group Admin
+                    </span>
+                  )}
+                </div>
+                {selectedMentionMember.about && (
+                  <p className="text-xs text-ink-muted leading-relaxed">{selectedMentionMember.about}</p>
+                )}
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   )
 }

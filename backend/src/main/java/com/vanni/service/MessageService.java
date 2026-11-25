@@ -2,6 +2,7 @@ package com.vanni.service;
 
 import com.vanni.dto.request.SendMessageRequest;
 import com.vanni.dto.response.AttachmentDto;
+import com.vanni.dto.response.MentionDto;
 import com.vanni.dto.response.MessageDto;
 import com.vanni.dto.response.ReactionDto;
 import com.vanni.dto.response.ReplySnippet;
@@ -11,6 +12,7 @@ import com.vanni.entity.ConversationMember;
 import com.vanni.entity.ConversationType;
 import com.vanni.entity.MemberRole;
 import com.vanni.entity.Message;
+import com.vanni.entity.MessageMention;
 import com.vanni.entity.MessageReceipt;
 import com.vanni.entity.MessageType;
 import com.vanni.entity.Reaction;
@@ -19,11 +21,14 @@ import com.vanni.exception.ApiException;
 import com.vanni.repository.AttachmentRepository;
 import com.vanni.repository.ConversationMemberRepository;
 import com.vanni.repository.ConversationRepository;
+import com.vanni.repository.MessageMentionRepository;
 import com.vanni.repository.MessageReceiptRepository;
 import com.vanni.repository.MessageRepository;
 import com.vanni.repository.ReactionRepository;
 import com.vanni.repository.UserRepository;
+import com.vanni.security.RateLimiterService;
 import com.vanni.storage.StorageService;
+import com.vanni.util.MentionParser;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -32,9 +37,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -54,6 +61,8 @@ public class MessageService {
     private final UserRepository userRepository;
     private final StorageService storageService;
     private final com.vanni.repository.BlockRepository blockRepository;
+    private final MessageMentionRepository messageMentionRepository;
+    private final RateLimiterService rateLimiterService;
 
     public MessageService(
             MessageRepository messageRepository,
@@ -68,7 +77,9 @@ public class MessageService {
             ReactionRepository reactionRepository,
             UserRepository userRepository,
             StorageService storageService,
-            com.vanni.repository.BlockRepository blockRepository) {
+            com.vanni.repository.BlockRepository blockRepository,
+            MessageMentionRepository messageMentionRepository,
+            RateLimiterService rateLimiterService) {
         this.messageRepository = messageRepository;
         this.conversationRepository = conversationRepository;
         this.conversationMemberRepository = conversationMemberRepository;
@@ -82,6 +93,8 @@ public class MessageService {
         this.userRepository = userRepository;
         this.storageService = storageService;
         this.blockRepository = blockRepository;
+        this.messageMentionRepository = messageMentionRepository;
+        this.rateLimiterService = rateLimiterService;
     }
 
     public MessageDto send(Long conversationId, Long senderId, SendMessageRequest req) {
@@ -103,10 +116,10 @@ public class MessageService {
 
         ConversationMember member = conversationAccessService.requireMember(conversationId, senderId);
         Conversation conv = member.getConversation();
+        List<ConversationMember> activeMembers = conversationMemberRepository.findByConversationIdAndLeftAtIsNull(conversationId);
 
         if (conv.getType() == ConversationType.DIRECT) {
-            List<ConversationMember> cms = conversationMemberRepository.findByConversationIdAndLeftAtIsNull(conversationId);
-            for (ConversationMember cm : cms) {
+            for (ConversationMember cm : activeMembers) {
                 if (!cm.getUser().getId().equals(senderId)) {
                     if (blockRepository.isBlockedEitherWay(senderId, cm.getUser().getId())) {
                         throw new ApiException(HttpStatus.FORBIDDEN, "USER_BLOCKED", "Cannot send message to a blocked user");
@@ -147,6 +160,19 @@ public class MessageService {
                 .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "INVALID_REPLY", "Reply target message not found in this conversation"));
         }
 
+        // Parse mentions for group conversations (server is the authority)
+        MentionParser.ParseResult parseResult = new MentionParser.ParseResult(List.of(), false);
+        if (conv.getType() == ConversationType.GROUP && !content.isEmpty()) {
+            Set<Long> activeMemberIds = activeMembers.stream()
+                .map(cm -> cm.getUser().getId())
+                .collect(Collectors.toSet());
+            boolean isAdmin = member.getRole() == MemberRole.ADMIN;
+            parseResult = MentionParser.parse(content, activeMemberIds, isAdmin);
+            if (parseResult.mentionsAll() && !rateLimiterService.tryConsumeMentionAll(conversationId)) {
+                throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "RATE_LIMITED", "You can only mention @all once every 5 minutes");
+            }
+        }
+
         MessageType messageType = MessageType.TEXT;
         if (!attachments.isEmpty()) {
             boolean allImages = attachments.stream()
@@ -161,8 +187,20 @@ public class MessageService {
         message.setContent(content.isEmpty() ? null : content);
         message.setMessageType(messageType);
         message.setReplyTo(replyTo);
+        message.setMentionsAll(parseResult.mentionsAll());
 
         message = messageRepository.save(message);
+
+        // Persist validated mention rows
+        Map<Long, User> memberUsersById = activeMembers.stream()
+            .collect(Collectors.toMap(cm -> cm.getUser().getId(), ConversationMember::getUser, (a, b) -> a));
+        List<MessageMention> savedMentions = new java.util.ArrayList<>();
+        for (Long mentionedId : parseResult.userIds()) {
+            User targetUser = memberUsersById.get(mentionedId);
+            if (targetUser != null) {
+                savedMentions.add(messageMentionRepository.save(new MessageMention(message, targetUser)));
+            }
+        }
 
         // Link attachments
         for (Attachment a : attachments) {
@@ -181,10 +219,37 @@ public class MessageService {
         member.setLastReadAt(message.getCreatedAt());
         conversationMemberRepository.save(member);
 
-        MessageDto dto = toDto(message, senderId);
-        eventPublisher.sendToConversationMembers(conversationId, "message.created", dto);
+        List<AttachmentDto> attachmentDtos = attachments.stream().map(this::toAttachmentDto).toList();
+        List<MentionDto> mentionDtos = toMentionDtos(savedMentions);
+        Long replyToSenderId = replyTo != null ? replyTo.getSender().getId() : null;
+        Set<Long> mentionedUserIds = savedMentions.stream().map(mm -> mm.getUser().getId()).collect(Collectors.toSet());
 
-        return dto;
+        MessageDto senderDto = null;
+        for (ConversationMember cm : activeMembers) {
+            Long recipientId = cm.getUser().getId();
+            boolean isSender = recipientId.equals(senderId);
+            boolean isMentioned = conv.getType() == ConversationType.GROUP
+                && !isSender
+                && (message.isMentionsAll() || mentionedUserIds.contains(recipientId));
+            boolean isReplyToMe = !isSender && replyToSenderId != null && replyToSenderId.equals(recipientId);
+            boolean notify = NotificationPolicy.shouldNotify(cm, isSender, isMentioned, isReplyToMe);
+
+            MessageDto recipientDto = toDtoWithStatus(
+                message,
+                "SENT",
+                attachmentDtos,
+                List.of(),
+                mentionDtos,
+                isMentioned,
+                notify
+            );
+            if (isSender) {
+                senderDto = recipientDto;
+            }
+            eventPublisher.sendToUser(recipientId, "message.created", recipientDto);
+        }
+
+        return senderDto != null ? senderDto : toDtoWithStatus(message, "SENT", attachmentDtos, List.of(), mentionDtos, false, false);
     }
 
     public MessageDto editMessage(Long messageId, Long userId, String newContent) {
@@ -205,7 +270,7 @@ public class MessageService {
         Message message = messageRepository.findById(messageId)
             .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "MESSAGE_NOT_FOUND", "Message not found"));
 
-        conversationAccessService.requireMember(message.getConversation().getId(), userId);
+        ConversationMember senderMember = conversationAccessService.requireMember(message.getConversation().getId(), userId);
 
         if (!message.getSender().getId().equals(userId)) {
             throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Only the sender can edit this message");
@@ -219,18 +284,44 @@ public class MessageService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "EDIT_WINDOW_EXPIRED", "Message can only be edited within 15 minutes");
         }
 
+        Long convId = message.getConversation().getId();
+        List<ConversationMember> members = conversationMemberRepository.findByConversationIdAndLeftAtIsNull(convId);
+
+        boolean hadMentionsAll = message.isMentionsAll();
+        MentionParser.ParseResult parseResult = new MentionParser.ParseResult(List.of(), false);
+        if (message.getConversation().getType() == ConversationType.GROUP) {
+            Set<Long> activeMemberIds = members.stream().map(cm -> cm.getUser().getId()).collect(Collectors.toSet());
+            boolean isAdmin = senderMember.getRole() == MemberRole.ADMIN;
+            parseResult = MentionParser.parse(trimmed, activeMemberIds, isAdmin);
+            if (parseResult.mentionsAll() && !hadMentionsAll && !rateLimiterService.tryConsumeMentionAll(convId)) {
+                throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "RATE_LIMITED", "You can only mention @all once every 5 minutes");
+            }
+        }
+
         message.setContent(trimmed);
+        message.setMentionsAll(parseResult.mentionsAll());
         message.setEditedAt(Instant.now());
         message = messageRepository.save(message);
 
-        // Broadcast message.updated to all active members
-        List<ConversationMember> members = conversationMemberRepository.findByConversationIdAndLeftAtIsNull(message.getConversation().getId());
+        // Rebuild message_mentions without re-notifying
+        messageMentionRepository.deleteByMessageId(messageId);
+        messageMentionRepository.flush();
+        Map<Long, User> memberUsersById = members.stream()
+            .collect(Collectors.toMap(cm -> cm.getUser().getId(), ConversationMember::getUser, (a, b) -> a));
+        for (Long mentionedId : parseResult.userIds()) {
+            User targetUser = memberUsersById.get(mentionedId);
+            if (targetUser != null) {
+                messageMentionRepository.save(new MessageMention(message, targetUser));
+            }
+        }
+
+        // Broadcast message.updated to all active members (notify=false to prevent re-notifying on edit)
         for (ConversationMember m : members) {
-            MessageDto memberDto = toDto(message, m.getUser().getId());
+            MessageDto memberDto = toDto(message, m.getUser().getId(), false);
             eventPublisher.sendToUser(m.getUser().getId(), "message.updated", memberDto);
         }
 
-        return toDto(message, userId);
+        return toDto(message, userId, false);
     }
 
     public void deleteMessage(Long messageId, Long userId) {
@@ -351,13 +442,26 @@ public class MessageService {
         Map<Long, List<Reaction>> reactionsByMsgId = reactionRepository.findByMessageIds(messageIds).stream()
             .collect(Collectors.groupingBy(r -> r.getMessage().getId()));
 
+        Map<Long, List<MentionDto>> mentionsByMsgId = messageMentionRepository.findByMessageIdsWithUser(messageIds).stream()
+            .collect(Collectors.groupingBy(
+                mm -> mm.getMessage().getId(),
+                Collectors.mapping(mm -> new MentionDto(mm.getUser().getId(), mm.getUser().getName()), Collectors.toList())
+            ));
+
         return messages.stream()
-            .map(m -> toDtoWithStatus(
-                m,
-                receiptService.computeMessageStatus(m, activeMembers, receiptsByMsgId),
-                attachmentsByMsgId.getOrDefault(m.getId(), List.of()),
-                aggregateReactions(reactionsByMsgId.getOrDefault(m.getId(), List.of()), userId)
-            ))
+            .map(m -> {
+                List<MentionDto> msgMentions = mentionsByMsgId.getOrDefault(m.getId(), List.of());
+                boolean mentionsMe = isMentionedViewer(m, msgMentions, userId);
+                return toDtoWithStatus(
+                    m,
+                    receiptService.computeMessageStatus(m, activeMembers, receiptsByMsgId),
+                    attachmentsByMsgId.getOrDefault(m.getId(), List.of()),
+                    aggregateReactions(reactionsByMsgId.getOrDefault(m.getId(), List.of()), userId),
+                    msgMentions,
+                    mentionsMe,
+                    false
+                );
+            })
             .toList();
     }
 
@@ -370,16 +474,18 @@ public class MessageService {
             conversationAccessService.requireMember(conversationId, userId);
         }
 
-        String pattern = "%" + query.trim().toLowerCase() + "%";
+        String trimmedLower = query.trim().toLowerCase();
+        String pattern = "%" + trimmedLower + "%";
+        boolean matchAll = "all".contains(trimmedLower) || "@all".contains(trimmedLower);
         int pageNum = Math.max(0, page);
         int pageSize = Math.min(Math.max(size <= 0 ? 20 : size, 1), 100);
         Pageable pageable = PageRequest.of(pageNum, pageSize);
 
         List<Message> messages;
         if (conversationId != null) {
-            messages = messageRepository.searchInConversation(conversationId, userId, pattern, pageable);
+            messages = messageRepository.searchInConversation(conversationId, userId, pattern, matchAll, pageable);
         } else {
-            messages = messageRepository.searchAcrossConversations(userId, pattern, pageable);
+            messages = messageRepository.searchAcrossConversations(userId, pattern, matchAll, pageable);
         }
 
         if (messages.isEmpty()) {
@@ -396,26 +502,41 @@ public class MessageService {
             ));
         Map<Long, List<Reaction>> reactionsByMsgId = reactionRepository.findByMessageIds(messageIds).stream()
             .collect(Collectors.groupingBy(r -> r.getMessage().getId()));
+        Map<Long, List<MentionDto>> mentionsByMsgId = messageMentionRepository.findByMessageIdsWithUser(messageIds).stream()
+            .collect(Collectors.groupingBy(
+                mm -> mm.getMessage().getId(),
+                Collectors.mapping(mm -> new MentionDto(mm.getUser().getId(), mm.getUser().getName()), Collectors.toList())
+            ));
 
         return messages.stream()
             .map(m -> {
                 List<ConversationMember> activeMembers = conversationMemberRepository
                     .findByConversationIdAndLeftAtIsNull(m.getConversation().getId());
+                List<MentionDto> msgMentions = mentionsByMsgId.getOrDefault(m.getId(), List.of());
                 return toDtoWithStatus(
                     m,
                     receiptService.computeMessageStatus(m, activeMembers, receiptsByMsgId),
                     attachmentsByMsgId.getOrDefault(m.getId(), List.of()),
-                    aggregateReactions(reactionsByMsgId.getOrDefault(m.getId(), List.of()), userId)
+                    aggregateReactions(reactionsByMsgId.getOrDefault(m.getId(), List.of()), userId),
+                    msgMentions,
+                    isMentionedViewer(m, msgMentions, userId),
+                    false
                 );
             })
+            // Ensure search matches rendered mention names (@Name), never raw <@id> token strings
+            .filter(dto -> dto.previewText() != null && dto.previewText().toLowerCase().contains(trimmedLower))
             .toList();
     }
 
     public MessageDto toDto(Message message) {
-        return toDto(message, null);
+        return toDto(message, null, false);
     }
 
     public MessageDto toDto(Message message, Long viewerUserId) {
+        return toDto(message, viewerUserId, false);
+    }
+
+    public MessageDto toDto(Message message, Long viewerUserId, boolean notify) {
         List<ConversationMember> activeMembers = conversationMemberRepository.findByConversationIdAndLeftAtIsNull(message.getConversation().getId());
         List<MessageReceipt> receipts = messageReceiptRepository.findByMessageId(message.getId());
         String status = receiptService.computeMessageStatus(message, activeMembers, Map.of(message.getId(), receipts));
@@ -424,12 +545,14 @@ public class MessageService {
             .toList();
         List<Reaction> reactions = reactionRepository.findByMessageId(message.getId());
         List<ReactionDto> reactionDtos = aggregateReactions(reactions, viewerUserId);
+        List<MentionDto> mentions = toMentionDtos(messageMentionRepository.findByMessageIdWithUser(message.getId()));
+        boolean mentionsMe = isMentionedViewer(message, mentions, viewerUserId);
 
-        return toDtoWithStatus(message, status, attachments, reactionDtos);
+        return toDtoWithStatus(message, status, attachments, reactionDtos, mentions, mentionsMe, notify);
     }
 
     public MessageDto toDtoWithStatus(Message message, String status) {
-        return toDto(message, null);
+        return toDto(message, null, false);
     }
 
     public MessageDto toDtoWithStatus(Message message, String status, List<AttachmentDto> attachments) {
@@ -441,22 +564,52 @@ public class MessageService {
             String status,
             List<AttachmentDto> attachments,
             List<ReactionDto> reactions) {
+        return toDtoWithStatus(message, status, attachments, reactions, List.of(), false, false);
+    }
+
+    public MessageDto toDtoWithStatus(
+            Message message,
+            String status,
+            List<AttachmentDto> attachments,
+            List<ReactionDto> reactions,
+            List<MentionDto> mentions,
+            boolean mentionsMe,
+            boolean notify) {
+        List<MentionDto> safeMentions = mentions != null ? mentions : List.of();
+        Map<Long, String> namesById = new HashMap<>();
+        for (MentionDto md : safeMentions) {
+            namesById.put(md.userId(), md.name());
+        }
+
         ReplySnippet replySnippet = null;
         if (message.getReplyTo() != null) {
             Message r = message.getReplyTo();
-            String snippet = r.getDeletedAt() != null ? "This message was deleted" : r.getContent();
+            String snippet;
+            if (r.getDeletedAt() != null) {
+                snippet = "This message was deleted";
+            } else {
+                List<MessageMention> replyMentions = messageMentionRepository.findByMessageIdWithUser(r.getId());
+                Map<Long, String> replyNames = replyMentions.stream()
+                    .collect(Collectors.toMap(mm -> mm.getUser().getId(), mm -> mm.getUser().getName(), (a, b) -> a));
+                snippet = MentionParser.renderDisplayText(r.getContent(), replyNames, r.isMentionsAll());
+            }
             if (snippet != null && snippet.length() > 60) {
                 snippet = snippet.substring(0, 57) + "...";
             }
             replySnippet = new ReplySnippet(r.getId(), r.getSender().getName(), snippet);
         }
 
+        String rawContent = message.getDeletedAt() != null ? null : message.getContent();
+        String previewText = rawContent != null
+            ? MentionParser.renderDisplayText(rawContent, namesById, message.isMentionsAll())
+            : null;
+
         return new MessageDto(
             message.getId(),
             message.getConversation().getId(),
             userService.toUserSummary(message.getSender()),
             message.getClientMessageId(),
-            message.getDeletedAt() != null ? null : message.getContent(),
+            rawContent,
             message.getMessageType(),
             replySnippet,
             attachments != null ? attachments : List.of(),
@@ -464,8 +617,38 @@ public class MessageService {
             status != null ? status : "SENT",
             message.getCreatedAt(),
             message.getEditedAt(),
-            message.getDeletedAt() != null
+            message.getDeletedAt() != null,
+            safeMentions,
+            message.isMentionsAll(),
+            mentionsMe,
+            notify,
+            previewText
         );
+    }
+
+    private List<MentionDto> toMentionDtos(List<MessageMention> mentions) {
+        if (mentions == null || mentions.isEmpty()) {
+            return List.of();
+        }
+        return mentions.stream()
+            .map(mm -> new MentionDto(mm.getUser().getId(), mm.getUser().getName()))
+            .toList();
+    }
+
+    private boolean isMentionedViewer(Message message, List<MentionDto> mentions, Long viewerUserId) {
+        if (viewerUserId == null || message.getDeletedAt() != null) {
+            return false;
+        }
+        if (message.getConversation().getType() != ConversationType.GROUP) {
+            return false;
+        }
+        if (message.getSender().getId().equals(viewerUserId)) {
+            return false;
+        }
+        if (message.isMentionsAll()) {
+            return true;
+        }
+        return mentions != null && mentions.stream().anyMatch(m -> m.userId().equals(viewerUserId));
     }
 
     public List<ReactionDto> aggregateReactions(List<Reaction> reactions, Long viewerUserId) {

@@ -50,6 +50,10 @@ public class Message {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    @Column(name = "mentions_all", nullable = false)
+    @Builder.Default
+    private boolean mentionsAll = false;
+
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) {

@@ -10,6 +10,7 @@ import {
   Archive,
   Loader2,
   SearchX,
+  AtSign,
 } from 'lucide-react'
 import ConversationList from './ConversationList'
 import UserSearchModal from './UserSearchModal'
@@ -108,17 +109,24 @@ export default function Sidebar({
     return conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0)
   }, [conversations])
 
+  const totalMentionUnread = useMemo(() => {
+    return conversations.reduce((sum, c) => sum + (c.mentionUnreadCount || 0), 0)
+  }, [conversations])
+
   const filteredConversations = useMemo(() => {
     let list = currentConversations
     if (filterTab === 'unread') {
       list = list.filter((c) => (c.unreadCount || 0) > 0)
+    } else if (filterTab === 'mentions') {
+      list = list.filter((c) => (c.mentionUnreadCount || 0) > 0)
     }
     if (!filterText.trim()) return list
     const q = filterText.toLowerCase()
     return list.filter((c) => c.title?.toLowerCase().includes(q))
   }, [currentConversations, filterText, filterTab])
 
-  const activeTabIndex = filterTab === 'unread' ? 1 : filterTab === 'archived' ? 2 : 0
+  const activeTabIndex =
+    filterTab === 'unread' ? 1 : filterTab === 'mentions' ? 2 : filterTab === 'archived' ? 3 : 0
 
   return (
     <aside className="w-full h-full flex flex-col select-none">
@@ -263,16 +271,16 @@ export default function Sidebar({
       {/* Segmented Filter Tabs with Sliding Glass Thumb */}
       {!filterText.trim() && (
         <div className="px-3.5 pb-2.5 border-b border-[var(--glass-border)]">
-          <div className="relative grid grid-cols-3 p-1 rounded-2xl glass-subtle">
+          <div className="relative grid grid-cols-4 p-1 rounded-2xl glass-subtle">
             <div
               aria-hidden="true"
-              className="absolute top-1 bottom-1 left-1 w-[calc((100%-0.5rem)/3)] rounded-xl glass-strong transition-transform duration-200 ease-out"
+              className="absolute top-1 bottom-1 left-1 w-[calc((100%-0.5rem)/4)] rounded-xl glass-strong transition-transform duration-200 ease-out"
               style={{ transform: `translateX(${activeTabIndex * 100}%)` }}
             />
             <button
               type="button"
               onClick={() => setFilterTab('all')}
-              className={`relative z-10 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer focus-accent ${
+              className={`relative z-10 py-1.5 rounded-xl text-[11px] font-semibold transition-colors cursor-pointer focus-accent ${
                 filterTab === 'all' ? 'text-accent-text' : 'text-ink-muted hover:text-ink'
               }`}
             >
@@ -281,25 +289,41 @@ export default function Sidebar({
             <button
               type="button"
               onClick={() => setFilterTab('unread')}
-              className={`relative z-10 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer focus-accent ${
+              className={`relative z-10 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-semibold transition-colors cursor-pointer focus-accent ${
                 filterTab === 'unread' ? 'text-accent-text' : 'text-ink-muted hover:text-ink'
               }`}
             >
               <span>Unread</span>
               {totalUnread > 0 && (
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold accent-badge tabular-nums">
+                <span className="text-[9px] px-1.5 py-0.2 rounded-full font-bold accent-badge tabular-nums">
                   {totalUnread}
                 </span>
               )}
             </button>
             <button
               type="button"
+              onClick={() => setFilterTab('mentions')}
+              className={`relative z-10 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-semibold transition-colors cursor-pointer focus-accent ${
+                filterTab === 'mentions' ? 'text-accent-text' : 'text-ink-muted hover:text-ink'
+              }`}
+              title="Conversations with unread @mentions"
+            >
+              <AtSign className="w-3 h-3" />
+              <span>Mentions</span>
+              {totalMentionUnread > 0 && (
+                <span className="text-[9px] px-1.5 py-0.2 rounded-full font-bold accent-badge tabular-nums">
+                  {totalMentionUnread}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
               onClick={() => setFilterTab('archived')}
-              className={`relative z-10 flex items-center justify-center gap-1 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer focus-accent ${
+              className={`relative z-10 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-semibold transition-colors cursor-pointer focus-accent ${
                 filterTab === 'archived' ? 'text-accent-text' : 'text-ink-muted hover:text-ink'
               }`}
             >
-              <Archive className="w-3.5 h-3.5" />
+              <Archive className="w-3 h-3" />
               <span>Archived</span>
             </button>
           </div>
@@ -341,7 +365,7 @@ export default function Sidebar({
                   <span className="tabular-nums">{formatConversationDate(msg.createdAt)}</span>
                 </div>
                 <p className="text-xs text-ink line-clamp-2 leading-relaxed">
-                  {msg.content}
+                  {msg.previewText || msg.content}
                 </p>
               </button>
             ))

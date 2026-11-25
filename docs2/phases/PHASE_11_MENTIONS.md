@@ -36,11 +36,11 @@
 Parser (valid, invalid ids, duplicates, non-members, `<@all>` by non-admin ignored); notification policy matrix (ALL/MENTIONS/NONE x mention/reply/plain); `mentionUnreadCount` correctness after read; edit does not re-notify; user removed from group is no longer mentionable; XSS payload inside a name renders as text. Playwright: A mentions B in a group; B (group muted) still gets the "@" badge.
 
 ## Acceptance checklist
-- [ ] `@` opens the picker; selection inserts a chip; sent message shows a highlighted pill for both users.
-- [ ] A mentioned user in a `MENTIONS`-only group is notified; a non-mentioned one is not.
-- [ ] `@all` works for admins and is ignored for members (UI hidden and server enforced).
-- [ ] "@" badge clears when the mention is read.
-- [ ] Renaming a user updates existing mention pills.
+- [x] `@` opens the picker; selection inserts a chip; sent message shows a highlighted pill for both users.
+- [x] A mentioned user in a `MENTIONS`-only group is notified; a non-mentioned one is not.
+- [x] `@all` works for admins and is ignored for members (UI hidden and server enforced).
+- [x] "@" badge clears when the mention is read.
+- [x] Renaming a user updates existing mention pills.
 
 ## Commit
 ```bash

@@ -166,24 +166,34 @@ export function SocketProvider({ children }) {
           // Ack delivery for incoming messages
           if (!isSender && data.id) {
             sendDelivered(data.conversationId, [data.id])
+            const cachedConvs = queryClient.getQueryData(['conversations']) || []
+            const targetConv = Array.isArray(cachedConvs) ? cachedConvs.find((c) => String(c.id) === convId) : null
+            const shouldNotify = data.notify !== undefined ? Boolean(data.notify) : !targetConv?.muted
+            const previewContent = data.previewText || data.content
+
             if (canReadNow) {
               sendRead(data.conversationId, data.id)
-            } else if (!isCurrentChatOpen) {
+            } else if (!isCurrentChatOpen && shouldNotify) {
               triggerToast({
                 id: data.id,
                 conversationId: convId,
                 senderName: data.sender?.name || 'Someone',
-                content: data.content,
+                content: previewContent,
               })
             }
 
-            // Desktop notification (only when tab hidden/unfocused and chat unmuted)
-            const cachedConvs = queryClient.getQueryData(['conversations']) || []
-            const targetConv = Array.isArray(cachedConvs) ? cachedConvs.find((c) => String(c.id) === convId) : null
-            if (!targetConv?.muted) {
+            // Desktop notification (only when tab hidden/unfocused and NotificationPolicy allows)
+            if (shouldNotify) {
+              const isGroupMention = data.mentionsMe && targetConv?.type === 'GROUP'
+              const notifTitle = isGroupMention
+                ? `${data.sender?.name || 'Someone'} mentioned you in ${targetConv?.title || 'Group'}`
+                : targetConv?.title || data.sender?.name || 'Vanni'
+              const notifBody = isGroupMention
+                ? previewContent || 'Sent an attachment'
+                : `${data.sender?.name ? data.sender.name + ': ' : ''}${previewContent || 'Sent an attachment'}`
               showDesktopNotification({
-                title: targetConv?.title || data.sender?.name || 'Vanni',
-                body: `${data.sender?.name ? data.sender.name + ': ' : ''}${data.content || 'Sent an attachment'}`,
+                title: notifTitle,
+                body: notifBody,
               })
             }
           }
@@ -229,16 +239,19 @@ export function SocketProvider({ children }) {
             const updatedConvs = oldConvs.map((conv) => {
               if (conv.id === data.conversationId) {
                 const unreadDelta = !canReadNow && !isSender ? 1 : 0
+                const mentionDelta = !canReadNow && !isSender && data.mentionsMe ? 1 : 0
                 return {
                   ...conv,
                   lastMessage: {
                     id: data.id,
                     content: data.content,
+                    previewText: data.previewText || data.content,
                     senderName: data.sender?.name || '',
                     createdAt: data.createdAt,
                   },
                   lastMessageAt: data.createdAt,
                   unreadCount: (conv.unreadCount || 0) + unreadDelta,
+                  mentionUnreadCount: (conv.mentionUnreadCount || 0) + mentionDelta,
                 }
               }
               return conv
@@ -274,6 +287,7 @@ export function SocketProvider({ children }) {
                   lastMessage: {
                     ...conv.lastMessage,
                     content: data.content,
+                    previewText: data.previewText || data.content,
                     deleted: data.deleted,
                   },
                 }
@@ -408,7 +422,13 @@ export function SocketProvider({ children }) {
           queryClient.setQueryData(['conversations'], (oldConvs = []) => {
             if (!Array.isArray(oldConvs)) return oldConvs
             return oldConvs.map((c) =>
-              String(c.id) === convId ? { ...c, unreadCount: data.unreadCount } : c
+              String(c.id) === convId
+                ? {
+                    ...c,
+                    unreadCount: data.unreadCount,
+                    mentionUnreadCount: data.mentionUnreadCount ?? c.mentionUnreadCount ?? 0,
+                  }
+                : c
             )
           })
           break

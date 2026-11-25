@@ -14,6 +14,7 @@ import com.vanni.entity.ConversationType;
 import com.vanni.entity.MemberRole;
 import com.vanni.entity.Message;
 import com.vanni.entity.MessageType;
+import com.vanni.entity.NotifyMode;
 import com.vanni.entity.User;
 import com.vanni.exception.ApiException;
 import com.vanni.repository.BlockRepository;
@@ -27,6 +28,7 @@ import com.vanni.util.MimeSniffer;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -446,8 +448,12 @@ public class ConversationService {
     public ConversationDto updateSettings(Long conversationId, Long userId, ConversationSettingsRequest req) {
         ConversationMember member = conversationAccessService.requireMember(conversationId, userId);
         if (req != null) {
-            if (req.muted() != null) {
+            if (req.notifyMode() != null) {
+                member.setNotifyMode(req.notifyMode());
+                member.setMuted(req.notifyMode() == NotifyMode.NONE);
+            } else if (req.muted() != null) {
                 member.setMuted(req.muted());
+                member.setNotifyMode(req.muted() ? NotifyMode.NONE : NotifyMode.ALL);
             }
             if (req.archived() != null) {
                 member.setArchived(req.archived());
@@ -458,6 +464,24 @@ public class ConversationService {
             conversationMemberRepository.save(member);
         }
         return toDto(member.getConversation(), userId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserSummaryResponse> getMentionableMembers(Long conversationId, Long currentUserId, String query) {
+        ConversationMember member = conversationAccessService.requireMember(conversationId, currentUserId);
+        if (member.getConversation().getType() != ConversationType.GROUP) {
+            return List.of();
+        }
+        String trimmed = query == null ? "" : query.trim();
+        if (trimmed.startsWith("@")) {
+            trimmed = trimmed.substring(1).trim();
+        }
+        String prefix = trimmed.isEmpty() ? "" : trimmed.toLowerCase() + "%";
+        return conversationMemberRepository
+            .findMentionableMembers(conversationId, currentUserId, prefix, PageRequest.of(0, 8))
+            .stream()
+            .map(cm -> userService.toUserSummary(cm.getUser(), cm.getRole(), currentUserId))
+            .toList();
     }
 
     public ConversationDto uploadGroupAvatar(Long conversationId, Long userId, MultipartFile file) {
@@ -563,14 +587,22 @@ public class ConversationService {
         }
 
         MemberRole myRole = myMember != null ? myMember.getRole() : MemberRole.MEMBER;
-        boolean muted = myMember != null && myMember.isMuted();
+        NotifyMode notifyMode = myMember != null && myMember.getNotifyMode() != null
+            ? myMember.getNotifyMode()
+            : (myMember != null && myMember.isMuted() ? NotifyMode.NONE : NotifyMode.ALL);
+        boolean muted = notifyMode == NotifyMode.NONE;
         boolean archived = myMember != null && myMember.isArchived();
         boolean pinned = myMember != null && myMember.isPinned();
 
         Long lastReadId = myMember != null ? myMember.getLastReadMessageId() : null;
         long unreadCount = messageRepository.countUnread(conv.getId(), lastReadId, currentUserId);
+        long mentionUnreadCount = conv.getType() == ConversationType.GROUP
+            ? messageRepository.countUnreadMentions(conv.getId(), lastReadId, currentUserId)
+            : 0L;
 
-        MessageDto lastMessage = conv.getLastMessage() != null ? messageService.toDto(conv.getLastMessage()) : null;
+        MessageDto lastMessage = conv.getLastMessage() != null
+            ? messageService.toDto(conv.getLastMessage(), currentUserId)
+            : null;
 
         List<UserSummaryResponse> memberSummaries = members.stream()
             .map(m -> userService.toUserSummary(m.getUser(), m.getRole(), currentUserId))
@@ -585,9 +617,11 @@ public class ConversationService {
             memberSummaries,
             myRole,
             muted,
+            notifyMode,
             archived,
             pinned,
             unreadCount,
+            mentionUnreadCount,
             lastMessage,
             conv.getLastMessageAt() != null ? conv.getLastMessageAt() : conv.getUpdatedAt()
         );

@@ -97,9 +97,11 @@ public class ReceiptService {
 
         // Emit unread.updated to reader's tabs
         long unreadCount = messageRepository.countUnread(conversationId, member.getLastReadMessageId(), userId);
+        long mentionUnreadCount = messageRepository.countUnreadMentions(conversationId, member.getLastReadMessageId(), userId);
         eventPublisher.sendToUser(userId, "unread.updated", Map.of(
             "conversationId", conversationId,
-            "unreadCount", unreadCount
+            "unreadCount", unreadCount,
+            "mentionUnreadCount", mentionUnreadCount
         ));
 
         // Upsert READ receipts for unread messages sent by others (sorted + pre-checked to avoid S-to-X deadlocks)

@@ -155,8 +155,8 @@ test.describe('Vanni Phase 9 E2E (Two Browsers, Realtime, Groups, Security, Mobi
     await groupDialog.getByRole('button', { name: 'Create Group' }).click()
 
     await expect(pageA.getByRole('heading', { name: `E2E Squad ${ts}` })).toBeVisible({ timeout: 10000 })
-    await pageA.getByPlaceholder(/Type a message/i).fill('Welcome to the squad!')
-    await pageA.getByPlaceholder(/Type a message/i).press('Enter')
+    await pageA.getByPlaceholder(/@ to mention/i).fill('Welcome to the squad!')
+    await pageA.getByPlaceholder(/@ to mention/i).press('Enter')
 
     // Mira opens group and sees the group message, then Asha removes Mira
     await pageC.getByRole('button', { name: new RegExp(`E2E Squad ${ts}`) }).click({ timeout: 10000 })
@@ -170,6 +170,28 @@ test.describe('Vanni Phase 9 E2E (Two Browsers, Realtime, Groups, Security, Mobi
     ])
     expect(delResp.status()).toBe(204)
     await expect(pageC.getByRole('heading', { name: /Welcome to Vanni/i })).toBeVisible({ timeout: 10000 })
+
+    // 6b. Phase 11 Mentions flow: Ravi switches away & mutes group -> Asha @mentions Ravi -> Ravi sees @ badge & clears on read
+    await pageB.goto('/app')
+    const squadRowB = pageB.locator('aside div.relative.group').filter({ hasText: `E2E Squad ${ts}` }).first()
+    await squadRowB.hover()
+    await squadRowB.getByRole('button', { name: 'Chat options' }).click()
+    await pageB.getByText('Off (Muted)').click()
+    await pageB.waitForTimeout(250)
+
+    const groupComposerA = pageA.getByPlaceholder(/@ to mention/i)
+    await groupComposerA.fill('Hey @Ravi')
+    await expect(pageA.getByRole('listbox', { name: /Mention suggestions/i })).toBeVisible()
+    await groupComposerA.press('Enter')
+    await groupComposerA.press('Enter')
+
+    await expect(pageA.getByRole('log').getByRole('button', { name: new RegExp(`@Ravi ${ts}`) })).toBeVisible({ timeout: 10000 })
+    await expect(squadRowB.getByLabel('Unread mentions')).toBeVisible({ timeout: 10000 })
+
+    // Ravi opens the group, sees highlighted mention pill, and @ badge clears
+    await squadRowB.click()
+    await expect(pageB.getByRole('log').getByRole('button', { name: new RegExp(`@Ravi ${ts}`) })).toBeVisible({ timeout: 10000 })
+    await expect(squadRowB.getByLabel('Unread mentions')).toHaveCount(0, { timeout: 10000 })
 
     // 7. Mobile 390px viewport check on Context B
     await pageB.setViewportSize({ width: 390, height: 844 })

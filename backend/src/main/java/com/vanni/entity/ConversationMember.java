@@ -47,6 +47,11 @@ public class ConversationMember {
     @Builder.Default
     private boolean muted = false;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "notify_mode", nullable = false, length = 16)
+    @Builder.Default
+    private NotifyMode notifyMode = NotifyMode.ALL;
+
     @Column(nullable = false)
     @Builder.Default
     private boolean archived = false;
@@ -59,6 +64,7 @@ public class ConversationMember {
         this.conversation = conversation;
         this.user = user;
         this.role = role != null ? role : MemberRole.MEMBER;
+        this.notifyMode = NotifyMode.ALL;
         this.joinedAt = Instant.now();
     }
 
@@ -66,6 +72,9 @@ public class ConversationMember {
     protected void onCreate() {
         if (joinedAt == null) {
             joinedAt = Instant.now();
+        }
+        if (notifyMode == null) {
+            notifyMode = muted ? NotifyMode.NONE : NotifyMode.ALL;
         }
     }
 }

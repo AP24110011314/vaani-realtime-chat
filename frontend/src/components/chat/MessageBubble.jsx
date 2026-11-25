@@ -17,23 +17,42 @@ import AttachmentPreview from './AttachmentPreview'
 
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏']
 
-function renderContentWithLinks(text, isMine) {
-  if (!text) return null
-  const urlRegex = /(https?:\/\/[^\s]+)/g
-  const parts = text.split(urlRegex)
+function findCodeRanges(text) {
+  const ranges = []
+  let i = 0
+  while (i < text.length) {
+    if (text[i] === '`') {
+      let ticks = 0
+      while (i + ticks < text.length && text[i + ticks] === '`') ticks++
+      const close = text.indexOf('`'.repeat(ticks), i + ticks)
+      if (close !== -1) {
+        ranges.push([i, close + ticks])
+        i = close + ticks
+        continue
+      }
+      i += ticks
+    } else {
+      i++
+    }
+  }
+  return ranges
+}
+
+function renderTextSegment(segment, isMine, mentionsById, mentionsAll, onMentionClick, keyPrefix) {
+  const tokenRegex = /(https?:\/\/[^\s]+|<@(?:\d+|all)>)/g
+  const parts = segment.split(tokenRegex)
 
   return parts.map((part, i) => {
-    if (part.match(urlRegex)) {
+    if (!part) return null
+    if (/^https?:\/\/[^\s]+$/.test(part)) {
       return (
         <a
-          key={i}
+          key={`${keyPrefix}-url-${i}`}
           href={part}
           target="_blank"
           rel="noopener noreferrer nofollow"
           className={`underline break-all font-medium ${
-            isMine
-              ? 'opacity-95 hover:opacity-100'
-              : 'text-accent-text hover:opacity-80'
+            isMine ? 'opacity-95 hover:opacity-100' : 'text-accent-text hover:opacity-80'
           }`}
           onClick={(e) => e.stopPropagation()}
         >
@@ -41,8 +60,90 @@ function renderContentWithLinks(text, isMine) {
         </a>
       )
     }
+
+    const mentionMatch = part.match(/^<@(\d+|all)>$/)
+    if (mentionMatch) {
+      const token = mentionMatch[1]
+      if (token === 'all' && mentionsAll) {
+        return (
+          <span
+            key={`${keyPrefix}-all-${i}`}
+            className={`inline-flex items-center px-1.5 py-0.2 mx-0.5 rounded-lg font-semibold ${
+              isMine
+                ? 'bg-black/15 dark:bg-black/25'
+                : 'bg-[var(--accent-soft-bg)] text-accent-text border border-[var(--accent-soft-border)]'
+            }`}
+          >
+            @all
+          </span>
+        )
+      }
+      const userName = mentionsById.get(token)
+      if (userName) {
+        return (
+          <button
+            key={`${keyPrefix}-m-${i}`}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onMentionClick?.(Number(token))
+            }}
+            className={`inline-flex items-center px-1.5 py-0.2 mx-0.5 rounded-lg font-semibold cursor-pointer hover:opacity-85 transition-opacity focus-accent ${
+              isMine
+                ? 'bg-black/15 dark:bg-black/25'
+                : 'bg-[var(--accent-soft-bg)] text-accent-text border border-[var(--accent-soft-border)]'
+            }`}
+          >
+            @{userName}
+          </button>
+        )
+      }
+    }
+
     return part
   })
+}
+
+function renderContentWithLinksAndMentions(text, isMine, mentions = [], mentionsAll = false, onMentionClick) {
+  if (!text) return null
+  const mentionsById = new Map((mentions || []).map((m) => [String(m.userId), m.name]))
+  const codeRanges = findCodeRanges(text)
+
+  if (codeRanges.length === 0) {
+    return renderTextSegment(text, isMine, mentionsById, mentionsAll, onMentionClick, 'seg-0')
+  }
+
+  const nodes = []
+  let pos = 0
+  codeRanges.forEach(([start, end], idx) => {
+    if (start > pos) {
+      nodes.push(
+        ...renderTextSegment(
+          text.slice(pos, start),
+          isMine,
+          mentionsById,
+          mentionsAll,
+          onMentionClick,
+          `pre-${idx}`
+        )
+      )
+    }
+    nodes.push(
+      <code
+        key={`code-${idx}`}
+        className="px-1.5 py-0.5 rounded-md text-[13px] font-mono bg-black/10 dark:bg-white/10"
+      >
+        {text.slice(start, end)}
+      </code>
+    )
+    pos = end
+  })
+  if (pos < text.length) {
+    nodes.push(
+      ...renderTextSegment(text.slice(pos), isMine, mentionsById, mentionsAll, onMentionClick, 'tail')
+    )
+  }
+  return nodes
 }
 
 export default function MessageBubble({
@@ -59,6 +160,7 @@ export default function MessageBubble({
   onDelete,
   onToggleReaction,
   onJumpToMessage,
+  onMentionClick,
 }) {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -251,6 +353,8 @@ export default function MessageBubble({
             ? isFailed
               ? 'bg-[var(--danger-bg)] border border-[var(--danger-border)] text-[var(--danger-text)]'
               : 'bubble-sent'
+            : message.mentionsMe && !isDeleted
+            ? 'bubble-received ring-2 ring-[var(--accent-solid)]/65 bg-[var(--accent-soft-bg)]'
             : 'bubble-received'
         } ${isPending ? 'opacity-70' : ''}`}
       >
@@ -287,7 +391,13 @@ export default function MessageBubble({
                 This message was deleted
               </span>
             ) : (
-              renderContentWithLinks(message.content, isMine)
+              renderContentWithLinksAndMentions(
+                message.content,
+                isMine,
+                message.mentions,
+                message.mentionsAll,
+                onMentionClick
+              )
             )}
           </p>
         ) : null}
