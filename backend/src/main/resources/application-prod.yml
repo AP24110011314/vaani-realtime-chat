@@ -1,0 +1,15 @@
+server:
+  forward-headers-strategy: native
+
+cookie:
+  secure: true
+
+app:
+  security:
+    hsts-enabled: true
+
+logging:
+  level:
+    com.vanni: INFO
+    org.springframework.security: WARN
+    org.flywaydb: INFO

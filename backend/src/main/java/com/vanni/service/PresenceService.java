@@ -100,6 +100,15 @@ public class PresenceService {
         List<PresenceDto> list = new ArrayList<>();
 
         for (User user : users) {
+            boolean isSelf = requesterId != null && requesterId.equals(user.getId());
+            if (!isSelf && requesterId != null && blockRepository.isBlockedEitherWay(requesterId, user.getId())) {
+                list.add(new PresenceDto(user.getId(), false, null));
+                continue;
+            }
+            if (!isSelf && !user.isShowLastSeen()) {
+                list.add(new PresenceDto(user.getId(), false, null));
+                continue;
+            }
             boolean online = isOnline(user.getId());
             Instant lastSeen = (!online && user.isShowLastSeen()) ? user.getLastSeenAt() : null;
             list.add(new PresenceDto(user.getId(), online, lastSeen));
@@ -110,6 +119,12 @@ public class PresenceService {
 
     private void broadcastPresenceToMutualMembers(Long userId, PresenceDto presence) {
         try {
+            boolean showPresence = userRepository.findById(userId)
+                    .map(User::isShowLastSeen)
+                    .orElse(true);
+            if (!showPresence) {
+                return;
+            }
             Set<Long> mutualUserIds = getMutualMemberUserIds(userId);
             for (Long targetUserId : mutualUserIds) {
                 if (!blockRepository.isBlockedEitherWay(userId, targetUserId)) {

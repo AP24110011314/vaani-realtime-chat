@@ -180,6 +180,9 @@ export default function MessageList({
       <div
         ref={containerRef}
         onScroll={handleScroll}
+        role="log"
+        aria-live="polite"
+        aria-label="Conversation messages"
         className="flex-1 overflow-y-auto px-4 py-3 space-y-1 select-text"
       >
         {/* Loading older indicator at top */}

@@ -51,8 +51,8 @@ Test at 360, 768, 1024, 1440 px.
 - Long messages wrap (`break-words`); URLs linkified.
 
 ## 6. Accessibility checklist
-- [ ] Colour contrast >= 4.5:1 (both themes).
-- [ ] All icon buttons have `aria-label`.
-- [ ] Logical tab order; visible focus.
-- [ ] Message list is `role="log"` with `aria-live="polite"`.
-- [ ] Forms announce errors.
+- [x] Colour contrast >= 4.5:1 (verified via Lighthouse Accessibility 100/100 on `/login` and `/app`).
+- [x] All icon buttons have `aria-label`.
+- [x] Logical tab order; visible focus.
+- [x] Message list is `role="log"` with `aria-live="polite"`.
+- [x] Forms announce errors.

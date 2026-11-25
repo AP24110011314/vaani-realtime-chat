@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 
 @Service
@@ -70,9 +71,27 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public UserSummaryResponse getUser(Long userId) {
+        return getUser(userId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public UserSummaryResponse getUser(Long userId, Long requesterId) {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "User not found"));
-        return toUserSummary(user);
+        boolean blocked = requesterId != null && !requesterId.equals(userId)
+            && blockRepository.isBlockedEitherWay(requesterId, userId);
+        if (blocked) {
+            return new UserSummaryResponse(
+                user.getId(),
+                user.getName(),
+                user.getAvatarUrl(),
+                null,
+                false,
+                null,
+                null
+            );
+        }
+        return toUserSummary(user, null, requesterId);
     }
 
     @Transactional(readOnly = true)
@@ -125,14 +144,21 @@ public class UserService {
     }
 
     public UserSummaryResponse toUserSummary(User user, com.vanni.entity.MemberRole role) {
-        boolean online = presenceService.isOnline(user.getId());
+        return toUserSummary(user, role, null);
+    }
+
+    public UserSummaryResponse toUserSummary(User user, com.vanni.entity.MemberRole role, Long requesterId) {
+        boolean isSelf = requesterId != null && requesterId.equals(user.getId());
+        boolean hidePresence = !isSelf && !user.isShowLastSeen();
+        boolean online = !hidePresence && presenceService.isOnline(user.getId());
+        Instant lastSeen = user.isShowLastSeen() ? user.getLastSeenAt() : null;
         return new UserSummaryResponse(
             user.getId(),
             user.getName(),
             user.getAvatarUrl(),
             user.getAbout(),
             online,
-            user.isShowLastSeen() ? user.getLastSeenAt() : null,
+            lastSeen,
             role
         );
     }

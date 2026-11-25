@@ -129,6 +129,7 @@ export default function GroupInfoPanel({ conversation, currentUserId, onClose, o
         <button
           onClick={onClose}
           className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+          aria-label="Close group info"
         >
           <X className="w-4 h-4" />
         </button>
@@ -137,7 +138,7 @@ export default function GroupInfoPanel({ conversation, currentUserId, onClose, o
       {/* Main Details */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {actionError && (
-          <div className="p-2.5 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs">
+          <div role="alert" className="p-2.5 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs">
             {actionError}
           </div>
         )}

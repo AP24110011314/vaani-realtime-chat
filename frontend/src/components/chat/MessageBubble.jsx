@@ -119,6 +119,7 @@ export default function MessageBubble({
               onClick={() => setShowEmojiPicker((prev) => !prev)}
               className="p-1 hover:text-amber-400 hover:bg-slate-800 rounded-full transition-colors"
               title="React"
+              aria-label="React to message"
             >
               <Smile className="w-3.5 h-3.5" />
             </button>
@@ -138,6 +139,7 @@ export default function MessageBubble({
                       setShowEmojiPicker(false)
                     }}
                     className="p-1 hover:scale-125 transition-transform text-sm"
+                    aria-label={`React with ${emoji}`}
                   >
                     {emoji}
                   </button>
@@ -152,6 +154,7 @@ export default function MessageBubble({
             onClick={() => onReply?.(message)}
             className="p-1 hover:text-indigo-400 hover:bg-slate-800 rounded-full transition-colors"
             title="Reply"
+            aria-label="Reply to message"
           >
             <Reply className="w-3.5 h-3.5" />
           </button>
@@ -163,6 +166,7 @@ export default function MessageBubble({
               onClick={handleCopy}
               className="p-1 hover:text-white hover:bg-slate-800 rounded-full transition-colors"
               title={copied ? 'Copied!' : 'Copy text'}
+              aria-label={copied ? 'Copied' : 'Copy text'}
             >
               {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
@@ -175,6 +179,7 @@ export default function MessageBubble({
               onClick={() => onEdit?.(message)}
               className="p-1 hover:text-amber-400 hover:bg-slate-800 rounded-full transition-colors"
               title="Edit message"
+              aria-label="Edit message"
             >
               <Pencil className="w-3.5 h-3.5" />
             </button>
@@ -187,6 +192,7 @@ export default function MessageBubble({
               onClick={() => setShowDeleteConfirm(true)}
               className="p-1 hover:text-rose-400 hover:bg-slate-800 rounded-full transition-colors"
               title="Delete message"
+              aria-label="Delete message"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -199,6 +205,7 @@ export default function MessageBubble({
               onClick={() => onShowReceipts?.(message)}
               className="p-1 hover:text-sky-400 hover:bg-slate-800 rounded-full transition-colors"
               title="Message info"
+              aria-label="Message info"
             >
               <Info className="w-3.5 h-3.5" />
             </button>

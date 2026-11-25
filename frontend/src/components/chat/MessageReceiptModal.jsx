@@ -36,6 +36,7 @@ export default function MessageReceiptModal({ isOpen, onClose, message }) {
           <button
             onClick={onClose}
             className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+            aria-label="Close message info"
           >
             <X className="w-4 h-4" />
           </button>

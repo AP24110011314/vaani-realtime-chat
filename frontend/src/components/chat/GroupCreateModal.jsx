@@ -136,6 +136,7 @@ export default function GroupCreateModal({ isOpen, onClose, onCreated }) {
           <button
             onClick={handleClose}
             className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+            aria-label="Close modal"
           >
             <X className="w-4 h-4" />
           </button>
@@ -144,7 +145,7 @@ export default function GroupCreateModal({ isOpen, onClose, onCreated }) {
         {/* Content */}
         <form onSubmit={handleCreate} className="p-4 flex-1 overflow-y-auto space-y-3.5">
           {error && (
-            <div className="p-2.5 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs">
+            <div role="alert" className="p-2.5 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs">
               {error}
             </div>
           )}

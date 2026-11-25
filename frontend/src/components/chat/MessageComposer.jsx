@@ -308,6 +308,7 @@ export default function MessageComposer({
             onClick={onCancelEdit}
             className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-amber-900/40 transition-colors"
             title="Cancel editing"
+            aria-label="Cancel editing"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -333,6 +334,7 @@ export default function MessageComposer({
             onClick={onCancelReply}
             className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-indigo-900/40 transition-colors"
             title="Cancel reply"
+            aria-label="Cancel reply"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -341,7 +343,7 @@ export default function MessageComposer({
 
       {/* Error banner */}
       {composerError && (
-        <div className="mb-2 p-2 rounded-xl bg-rose-950/80 border border-rose-800 text-rose-200 text-xs flex items-center gap-2 animate-in fade-in">
+        <div role="alert" className="mb-2 p-2 rounded-xl bg-rose-950/80 border border-rose-800 text-rose-200 text-xs flex items-center gap-2 animate-in fade-in">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           <span>{composerError}</span>
         </div>

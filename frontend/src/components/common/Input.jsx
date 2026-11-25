@@ -31,6 +31,8 @@ const Input = forwardRef(function Input(
           ref={ref}
           id={inputId}
           type={type}
+          aria-invalid={error ? 'true' : undefined}
+          aria-describedby={error ? `${inputId}-error` : helperText ? `${inputId}-helper` : undefined}
           className={`w-full bg-slate-900 border rounded-xl px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 transition-all duration-150 ${
             error
               ? 'border-rose-500/70 focus:ring-rose-500/40 focus:border-rose-500'
@@ -46,11 +48,11 @@ const Input = forwardRef(function Input(
       </div>
 
       {error && (
-        <p className="text-xs text-rose-400 font-medium mt-0.5">{error}</p>
+        <p id={`${inputId}-error`} role="alert" className="text-xs text-rose-400 font-medium mt-0.5">{error}</p>
       )}
 
       {helperText && !error && (
-        <p className="text-xs text-slate-500 mt-0.5">{helperText}</p>
+        <p id={`${inputId}-helper`} className="text-xs text-slate-500 mt-0.5">{helperText}</p>
       )}
     </div>
   )

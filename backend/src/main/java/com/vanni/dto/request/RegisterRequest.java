@@ -22,4 +22,9 @@ public record RegisterRequest(
         message = "Password must contain at least one letter and one number"
     )
     String password
-) {}
+) {
+    @Override
+    public String toString() {
+        return "RegisterRequest[name=" + name + ", email=" + email + ", password=[REDACTED]]";
+    }
+}

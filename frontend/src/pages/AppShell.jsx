@@ -83,7 +83,7 @@ export default function AppShell() {
         </div>
 
         {/* Main Chat Area - visible on desktop, or mobile when conversation is selected */}
-        <div
+        <main
           className={`flex-1 h-full min-w-0 ${
             !conversationId ? 'hidden md:flex' : 'flex'
           }`}
@@ -93,7 +93,7 @@ export default function AppShell() {
             onBack={handleBackToSidebar}
             currentUserId={user?.id}
           />
-        </div>
+        </main>
       </div>
     </div>
   )

@@ -15,4 +15,9 @@ public record ChangePasswordRequest(
         message = "Password must contain at least one letter and one number"
     )
     String newPassword
-) {}
+) {
+    @Override
+    public String toString() {
+        return "ChangePasswordRequest[currentPassword=[REDACTED], newPassword=[REDACTED]]";
+    }
+}

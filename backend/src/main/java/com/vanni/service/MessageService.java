@@ -205,6 +205,8 @@ public class MessageService {
         Message message = messageRepository.findById(messageId)
             .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "MESSAGE_NOT_FOUND", "Message not found"));
 
+        conversationAccessService.requireMember(message.getConversation().getId(), userId);
+
         if (!message.getSender().getId().equals(userId)) {
             throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Only the sender can edit this message");
         }
@@ -235,19 +237,15 @@ public class MessageService {
         Message message = messageRepository.findById(messageId)
             .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "MESSAGE_NOT_FOUND", "Message not found"));
 
+        ConversationMember cm = conversationAccessService.requireMember(message.getConversation().getId(), userId);
+
         if (message.getDeletedAt() != null) {
             return; // Idempotent
         }
 
         boolean isSender = message.getSender().getId().equals(userId);
-        boolean isGroupAdmin = false;
-        if (!isSender && message.getConversation().getType() == ConversationType.GROUP) {
-            Optional<ConversationMember> cm = conversationMemberRepository
-                .findByConversationIdAndUserIdAndLeftAtIsNull(message.getConversation().getId(), userId);
-            if (cm.isPresent() && cm.get().getRole() == MemberRole.ADMIN) {
-                isGroupAdmin = true;
-            }
-        }
+        boolean isGroupAdmin = message.getConversation().getType() == ConversationType.GROUP
+            && cm.getRole() == MemberRole.ADMIN;
 
         if (!isSender && !isGroupAdmin) {
             throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Only the sender or a group admin can delete this message");

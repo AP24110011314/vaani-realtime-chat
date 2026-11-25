@@ -82,16 +82,24 @@ public class AuthService {
         String rateKey = clientIp + ":" + email;
 
         if (!rateLimiterService.tryConsumeLogin(rateKey)) {
-            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "RATE_LIMITED", "Too many login attempts. Please try again later.");
+            long retryAfter = rateLimiterService.getLoginRetryAfterSeconds(rateKey);
+            throw new ApiException(
+                HttpStatus.TOO_MANY_REQUESTS,
+                "RATE_LIMITED",
+                "Too many login attempts. Please try again later.",
+                java.util.Map.of("retryAfterSeconds", String.valueOf(retryAfter))
+            );
         }
 
         User user = userRepository.findByEmail(email).orElse(null);
         if (user == null) {
             passwordEncoder.matches(req.password(), dummyHash);
+            rateLimiterService.recordLoginFailure(rateKey);
             throw new ApiException(HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "Invalid email or password");
         }
 
         if (!passwordEncoder.matches(req.password(), user.getPasswordHash())) {
+            rateLimiterService.recordLoginFailure(rateKey);
             throw new ApiException(HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "Invalid email or password");
         }
 
@@ -99,6 +107,7 @@ public class AuthService {
             throw new ApiException(HttpStatus.FORBIDDEN, "ACCOUNT_DISABLED", "Your account has been disabled");
         }
 
+        rateLimiterService.resetLoginFailures(rateKey);
         return createSession(user, userAgent);
     }
 

@@ -36,7 +36,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ErrorResponse> handleApiException(ApiException ex, HttpServletRequest req, HttpServletResponse resp) {
         if (ex.getStatus() == HttpStatus.TOO_MANY_REQUESTS) {
-            resp.setHeader("Retry-After", "60");
+            Object retryAfter = ex.getDetails() != null ? ex.getDetails().get("retryAfterSeconds") : null;
+            resp.setHeader("Retry-After", retryAfter != null ? retryAfter.toString() : "60");
         }
         ErrorResponse body = new ErrorResponse(
             Instant.now(),

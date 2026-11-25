@@ -138,6 +138,7 @@ export default function ChatHeader({
                 onClick={handlePrevMatch}
                 className="p-1 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
                 title="Previous match"
+                aria-label="Previous match"
               >
                 <ChevronUp className="w-4 h-4" />
               </button>
@@ -146,6 +147,7 @@ export default function ChatHeader({
                 onClick={handleNextMatch}
                 className="p-1 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
                 title="Next match"
+                aria-label="Next match"
               >
                 <ChevronDown className="w-4 h-4" />
               </button>
@@ -161,6 +163,7 @@ export default function ChatHeader({
             onClick={handleCloseSearch}
             className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"
             title="Close search"
+            aria-label="Close search"
           >
             <X className="w-4 h-4" />
           </button>

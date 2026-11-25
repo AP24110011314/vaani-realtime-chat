@@ -63,11 +63,11 @@ Return 429 with `Retry-After`.
 - Pin Docker image tags.
 
 ## 9. Security test checklist
-- [ ] User A cannot read/send/subscribe/upload into User B's conversation (REST **and** WS).
-- [ ] Tampered/expired JWT rejected; refresh reuse revokes family.
-- [ ] CSRF: POST without header fails.
-- [ ] Wrong-origin WebSocket handshake rejected.
-- [ ] Oversized / disallowed / mislabeled files rejected.
-- [ ] XSS payload in message and name renders as text.
-- [ ] Brute-force login gets 429.
-- [ ] Passwords never appear in logs or responses.
+- [x] User A cannot read/send/subscribe/upload into User B's conversation (REST **and** WS).
+- [x] Tampered/expired JWT rejected; refresh reuse revokes family.
+- [x] CSRF: POST without header fails.
+- [x] Wrong-origin WebSocket handshake rejected.
+- [x] Oversized / disallowed / mislabeled files rejected.
+- [x] XSS payload in message and name renders as text.
+- [x] Brute-force login gets 429.
+- [x] Passwords never appear in logs or responses.

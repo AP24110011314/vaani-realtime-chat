@@ -3,17 +3,21 @@ package com.vanni.controller;
 import com.vanni.dto.request.UpdateUserRequest;
 import com.vanni.dto.response.UserMeResponse;
 import com.vanni.dto.response.UserSummaryResponse;
+import com.vanni.exception.ApiException;
 import com.vanni.security.CurrentUser;
+import com.vanni.security.RateLimiterService;
 import com.vanni.security.UserPrincipal;
 import com.vanni.service.AttachmentService;
 import com.vanni.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.core.io.Resource;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/users")
@@ -21,10 +25,12 @@ public class UserController {
 
     private final UserService userService;
     private final AttachmentService attachmentService;
+    private final RateLimiterService rateLimiterService;
 
-    public UserController(UserService userService, AttachmentService attachmentService) {
+    public UserController(UserService userService, AttachmentService attachmentService, RateLimiterService rateLimiterService) {
         this.userService = userService;
         this.attachmentService = attachmentService;
+        this.rateLimiterService = rateLimiterService;
     }
 
     @GetMapping("/me")
@@ -65,12 +71,23 @@ public class UserController {
             @RequestParam(required = false, defaultValue = "0") int page,
             @RequestParam(required = false, defaultValue = "20") int size
     ) {
+        if (!rateLimiterService.tryConsumeSearch(principal.id())) {
+            throw new ApiException(
+                HttpStatus.TOO_MANY_REQUESTS,
+                "RATE_LIMITED",
+                "Too many search requests. Please try again shortly.",
+                Map.of("retryAfterSeconds", "60")
+            );
+        }
         return ResponseEntity.ok(userService.search(principal.id(), query, page, size));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<UserSummaryResponse> getUser(@PathVariable Long id) {
-        return ResponseEntity.ok(userService.getUser(id));
+    public ResponseEntity<UserSummaryResponse> getUser(
+            @CurrentUser UserPrincipal principal,
+            @PathVariable Long id
+    ) {
+        return ResponseEntity.ok(userService.getUser(id, principal.id()));
     }
 
     @PostMapping("/{id}/block")
