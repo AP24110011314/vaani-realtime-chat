@@ -1,70 +1,138 @@
 # Vanni
 
-> A real-time chat **web application** built with React, Java Spring Boot, WebSocket (STOMP) and MySQL.
+> A real-time chat **web application** built with React, Java Spring Boot, WebSocket (STOMP), and MySQL.
 
-Vanni runs in the browser. There is nothing to install on a phone or desktop. Users register, find each other, chat one-to-one or in groups, share files and see live presence, typing and read status.
-
-This repository is planned to be built **phase by phase**. Each phase ends with exactly **one Git commit** that has a 2-3 word message.
+Vanni runs in any modern desktop or mobile browser. Users register, search contacts, chat one-to-one or in groups, share images and files, react/reply/edit/delete messages, and see live presence, typing indicators, and delivery/read receipts.
 
 ---
 
-## Documentation map
+## Features
 
-| File | What it covers |
-|---|---|
-| [`CLAUDE.md`](CLAUDE.md) | Rules for the AI coding agent (read first when implementing) |
-| [`docs/PROJECT_OVERVIEW.md`](docs/PROJECT_OVERVIEW.md) | Goals, roles, scope, requirements, MVP |
-| [`docs/FEATURES.md`](docs/FEATURES.md) | Complete feature list in tiers (Core / Extended / Stretch) |
-| [`docs/TECH_STACK.md`](docs/TECH_STACK.md) | Versions, libraries, key decisions |
-| [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) | **Ports**, env variables, macOS setup, Docker MySQL |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System design, folder structure, flows |
-| [`docs/DATABASE.md`](docs/DATABASE.md) | Schema, SQL, indexes, rules |
-| [`docs/API.md`](docs/API.md) | REST API contract |
-| [`docs/WEBSOCKET.md`](docs/WEBSOCKET.md) | STOMP destinations and event payloads |
-| [`docs/SECURITY.md`](docs/SECURITY.md) | Auth strategy, authorization rules, hardening |
-| [`docs/BACKEND_GUIDE.md`](docs/BACKEND_GUIDE.md) | Spring Boot coding conventions |
-| [`docs/FRONTEND_GUIDE.md`](docs/FRONTEND_GUIDE.md) | React conventions, state, hooks |
-| [`docs/UI_UX.md`](docs/UI_UX.md) | Pages, layouts, design system, responsive rules |
-| [`docs/TESTING.md`](docs/TESTING.md) | Test strategy and checklists |
-| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Production deployment plan |
-| [`docs/GIT_WORKFLOW.md`](docs/GIT_WORKFLOW.md) | Branching and the commit-per-phase rule |
-| [`docs/PHASES.md`](docs/PHASES.md) | Roadmap overview + commit message table |
-| [`docs/phases/PHASE_01..10`](docs/phases/) | Step-by-step instructions for each phase |
-
-## Quick facts
-
-| Item | Value |
-|---|---|
-| Frontend | React 19 + Vite + Tailwind CSS 4 → **http://localhost:5173** |
-| Backend | Java 21 + Spring Boot 4.1 → **http://localhost:8080** |
-| WebSocket | `ws://localhost:8080/ws` (proxied through Vite in dev) |
-| Database | MySQL 8.4 LTS → host port **3307** (Docker) |
-| **Never use** | **5000** and **7000** (macOS AirPlay Receiver uses them) |
-
-## Build order
-
-Start with `docs/PHASES.md`, then follow `docs/phases/PHASE_01_PROJECT_SETUP.md` onward. Do not start a phase until the previous phase's acceptance checklist passes and its commit is made.
+- **Authentication & Security:** HttpOnly cookie JWT (`vanni_at`), SHA-256 hashed rotating refresh tokens (`vanni_rt`) with reuse family revocation, SPA CSRF (`X-XSRF-TOKEN`), strict WebSocket Origin validation, Bucket4j rate limiting with `Retry-After`, CSP/HSTS security headers, and `X-Request-Id` MDC logging.
+- **Direct & Group Messaging:** Idempotent `clientMessageId` delivery, cursor pagination (`before`/`after`), typing indicators (server-throttled + client-debounced), system announcements, group admin roles, and last-admin promotion.
+- **Receipts & Notifications:** Monotonic `SENT` → `DELIVERED` → `READ` tracking, per-recipient receipt inspection, unread counters, privacy flags (`showLastSeen`, `showReadReceipts`), mute/pin/archive settings, and browser notifications.
+- **Attachments & Profiles:** Apache Tika MIME sniffing, executable/spoofed-extension rejection, image EXIF stripping, local or cloud storage abstraction, user/group avatars, and multi-image lightbox navigation.
+- **Message Enhancements & Settings:** Replies/quotes, emoji reactions, 15-minute edit window, soft delete, in-chat & global search, user blocking, Light/Dark/System themes, and multi-device logout.
 
 ---
 
-## Getting Started
+## Tech Stack
 
-### 1. Prerequisites
-- Java 21 LTS (`/opt/homebrew/opt/openjdk@21` or via Homebrew)
-- Node 22+ (`node -v && npm -v`)
+| Layer | Technology |
+|---|---|
+| Frontend | React 19, Vite 8, Tailwind CSS 4, TanStack Query 5, React Hook Form, Zod, `@stomp/stompjs`, Lucide |
+| Backend | Java 21 LTS, Spring Boot 4.1.3, Spring Security, Spring Data JPA, Spring WebSocket (STOMP), Flyway, JJWT, Bucket4j |
+| Database | MySQL 8.4 (`utf8mb4`) |
+| Testing & QA | JUnit 5, Mockito, MockMvc, JaCoCo, Vitest, React Testing Library, MSW, Playwright, Lighthouse |
+| Deployment | Docker multi-stage builds, Nginx reverse proxy, GitHub Actions CI/CD |
+
+---
+
+## Architecture
+
+```text
+  Browser (React + STOMP.js)
+       │  HTTPS / WSS (same-origin cookies + X-XSRF-TOKEN)
+       ▼
+  Nginx Reverse Proxy / Vite Dev Proxy
+       ├── /api/**  ──▶ Spring Boot REST Controllers ──▶ Services / Bucket4j ──▶ MySQL 8.4 (Flyway V1..V6)
+       ├── /ws      ──▶ STOMP Handshake + Auth Interceptor ──▶ EventPublisher ──▶ Storage (Local / S3 / Cloudinary)
+       └── /*       ──▶ React SPA (dist/)
+```
+
+---
+
+## Getting Started (< 15 Minutes)
+
+### Prerequisites
+- Java 21 LTS (`/opt/homebrew/opt/openjdk@21` on macOS)
+- Node.js 22+ and npm
 - Docker Desktop (`docker compose`)
 
-### 2. Run commands
+### Local Development
 ```bash
-# 1. Start MySQL (port 3307)
+# 1. Copy environment template (adjust if needed)
+cp .env.example .env
+
+# 2. Start MySQL 8.4 on host port 3307
 docker compose up -d mysql
 
-# 2. Run Backend (port 8080)
+# 3. Start Spring Boot backend (port 8080)
 cd backend && ./mvnw spring-boot:run
 
-# 3. Run Frontend (port 5173)
+# 4. Start React frontend (port 5173, proxies /api and /ws -> :8080)
 cd frontend && npm install && npm run dev
 ```
 
-Visit [http://localhost:5173](http://localhost:5173) in your browser.
+Visit [http://localhost:5173](http://localhost:5173). Never use ports `5000` or `7000` on macOS (reserved by AirPlay Receiver).
 
+### Self-Hosted Production (Docker Compose)
+```bash
+cp .env.example .env
+# Set strong DB_ROOT_PASSWORD, DB_PASSWORD, JWT_SECRET (64+ chars), and ALLOWED_ORIGINS
+docker compose -f docker-compose.prod.yml up -d --build
+```
+The Nginx container exposes the application on `${APP_PORT:-8088}` and proxies `/api` and `/ws` internally to the non-root `backend:8080` service.
+
+---
+
+## Environment Variables
+
+See [`.env.example`](.env.example) for the complete template:
+
+| Variable | Default (dev) | Purpose |
+|---|---|---|
+| `SERVER_PORT` | `8080` | Backend HTTP port |
+| `DB_HOST` / `DB_PORT` / `DB_NAME` | `localhost` / `3307` / `vanni` | MySQL 8.4 connection |
+| `DB_USER` / `DB_PASSWORD` | `vanni` / `vannipass` | Database credentials |
+| `JWT_SECRET` | dev fallback | 64+ character HMAC secret (required in prod) |
+| `COOKIE_SECURE` | `false` (`true` in `prod`) | `Secure` flag on `vanni_at` and `vanni_rt` |
+| `ALLOWED_ORIGINS` | `http://localhost:5173,...` | Allowed WebSocket `Origin` patterns |
+| `STORAGE_PROVIDER` / `STORAGE_LOCAL_DIR` | `local` / `./uploads` | Attachment & avatar storage (`local` \| `cloudinary` \| `s3`) |
+| `MAX_UPLOAD_MB` | `10` | Max attachment upload size |
+| `APP_PORT` | `8088` | Host port mapped to Nginx in `docker-compose.prod.yml` |
+
+---
+
+## API & WebSocket Summary
+
+- **REST (`/api`):** Auth (`/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/logout-all`, `/auth/change-password`, `/auth/csrf`), Users (`/users/me`, `/users/me/avatar`, `/users/{id}/block`, `/users/blocked`), Conversations (`/conversations`, `/direct`, `/groups`, `/members`, `/leave`, `/settings`, `/avatar`), Messages (`/conversations/{id}/messages`, `/messages/{id}`, `/reactions`, `/receipts`, `/search/messages`), Attachments (`/attachments`), Presence (`/presence`), Health (`/actuator/health`). Full contract: [`docs/API.md`](docs/API.md).
+- **WebSocket STOMP (`/ws`):** Single user queue subscription `/user/queue/events`; client frames `/app/chat.send`, `/app/chat.delivered`, `/app/chat.read`, `/app/chat.typing`; server events `message.created`, `message.updated`, `message.deleted`, `receipt.updated`, `unread.updated`, `typing`, `presence.changed`, `conversation.*`, `error`. Full contract: [`docs/WEBSOCKET.md`](docs/WEBSOCKET.md).
+
+---
+
+## Screenshots
+
+| Landing | Login |
+|---|---|
+| ![Landing](docs/screenshots/landing.png) | ![Login](docs/screenshots/login.png) |
+
+| Chat (Desktop) | Chat (Mobile 360px) |
+|---|---|
+| ![Chat Desktop](docs/screenshots/chat_desktop.png) | ![Chat Mobile](docs/screenshots/chat_mobile.png) |
+
+| Groups | Profile | Settings & Dark Mode |
+|---|---|---|
+| ![Group](docs/screenshots/group.png) | ![Profile](docs/screenshots/profile.png) | ![Dark Mode](docs/screenshots/dark_mode.png) |
+
+---
+
+## Testing & Quality
+
+```bash
+# Backend unit, integration, security & WebSocket tests + JaCoCo (>= 70% on service & security)
+cd backend && ./mvnw verify
+
+# Frontend lint, unit/MSW tests, production build & Playwright E2E
+cd frontend && npm run lint && npm test -- --run && npm run build && npx playwright test
+```
+
+## Documentation Map
+
+- [`docs/API.md`](docs/API.md) — REST contract and DTO schemas
+- [`docs/WEBSOCKET.md`](docs/WEBSOCKET.md) — STOMP destinations and event envelopes
+- [`docs/SECURITY.md`](docs/SECURITY.md) — Auth, authorization, headers, rate limits & checklist
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — Production topology, Docker & CI/CD
+- [`docs/DECISIONS.md`](docs/DECISIONS.md) — Architectural decisions log
+- [`docs/TESTING.md`](docs/TESTING.md) — Test strategy and coverage expectations
+- [`docs/phases/`](docs/phases/) — Phase 1–10 plans and verification records

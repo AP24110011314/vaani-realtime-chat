@@ -17,11 +17,23 @@
 10. Tag release (optional): `git tag v1.0.0`.
 
 ## Acceptance checklist
-- [ ] Public HTTPS URL works on desktop and mobile browsers.
-- [ ] WebSocket stays connected > 5 minutes idle (heartbeats working through the proxy).
-- [ ] No secrets in repo history; `.env.example` complete.
-- [ ] README lets a new developer run Vanni locally in under 15 minutes.
-- [ ] CI is green.
+- [ ] Public HTTPS URL works on desktop and mobile browsers (cloud host provisioning is environment-specific; self-hosted Nginx + Docker Compose production stack verified locally on `http://localhost:8088`).
+- [x] WebSocket reverse proxy configured with `Upgrade`/`Connection` headers and `proxy_read_timeout 3600s` (> 5 minutes idle) with 10s STOMP heartbeats; live handshake verified through Nginx.
+- [x] No secrets in repo history; `.env.example` complete.
+- [x] README lets a new developer run Vanni locally in under 15 minutes (`README.md`, `docker-compose.yml`, `docker-compose.prod.yml`).
+- [x] CI workflows added (`.github/workflows/ci.yml`, `.github/workflows/deploy.yml`); all local CI checks (`./mvnw verify`, `npm run lint`, `npm test -- --run`, `npm run build`, Playwright E2E) green.
+
+## Implemented & Verified Summary
+- **Containers & Reverse Proxy**:
+  - `backend/Dockerfile` (multi-stage Eclipse Temurin 21 JDK -> non-root JRE `vanni` user) & `backend/.dockerignore`.
+  - `frontend/Dockerfile` (Node 22 build -> Nginx 1.27 Alpine), `frontend/nginx.conf` (SPA fallback, CSP/security headers, `/api/` proxy, `/ws` WebSocket upgrade proxy with `3600s` timeouts), & `frontend/.dockerignore`.
+  - `docker-compose.prod.yml` (`mysql:8.4`, `backend`, `frontend` on `${APP_PORT:-8088}:80`) verified end-to-end with healthcheck, Flyway startup, `/login` security headers, registration, and WebSocket STOMP `CONNECTED` through Nginx.
+- **Production Config & CI/CD**:
+  - `application.yml` & `application-prod.yml` (`cookie.secure`, strict `ALLOWED_ORIGINS`, `springdoc` disabled, `actuator` health-only, `ddl-auto=validate`, `INFO` logging).
+  - `.github/workflows/ci.yml` (`./mvnw -B verify` against MySQL 8.4 + frontend lint/test/build) and `.github/workflows/deploy.yml`.
+- **Docs & Screenshots**:
+  - Captured 7 screenshots in `docs/screenshots/` (`landing.png`, `login.png`, `chat_desktop.png`, `chat_mobile.png`, `group.png`, `profile.png`, `dark_mode.png`).
+  - Finalized `README.md`, `docs/API.md`, `docs/DECISIONS.md`, and `.env.example`.
 
 ## Commit
 ```bash

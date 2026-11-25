@@ -43,6 +43,7 @@ Base path: `/api`. JSON in/out, UTF-8. Auth via HttpOnly cookies (`vanni_at`, `v
 | POST | `/auth/logout` | - | 204; revokes refresh token, clears cookies |
 | POST | `/auth/logout-all` | - | 204; revokes all refresh tokens |
 | POST | `/auth/change-password` | `{currentPassword,newPassword}` | 204 |
+| GET | `/auth/csrf` | - | 200; ensures `XSRF-TOKEN` cookie is issued |
 
 Password rules: min 8 chars, at least one letter and one digit (max 72 bytes because of BCrypt). Name 2-80 chars. Email normalised to lowercase.
 
@@ -68,6 +69,7 @@ Password rules: min 8 chars, at least one letter and one digit (max 72 bytes bec
 | POST | `/conversations/groups` | `{title, description?, memberIds[]}` | 201 `ConversationDto`; creator = ADMIN |
 | PATCH | `/conversations/{id}` | `{title?, description?}` | group admin only |
 | POST | `/conversations/{id}/avatar` | multipart | group admin only |
+| GET | `/conversations/{id}/avatar` | - | active member downloads group avatar |
 | POST | `/conversations/{id}/members` | `{userIds[]}` | group admin only |
 | DELETE | `/conversations/{id}/members/{userId}` | | admin removes member |
 | POST | `/conversations/{id}/leave` | | member leaves (last admin leaving promotes oldest member) |
