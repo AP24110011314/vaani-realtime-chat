@@ -169,7 +169,7 @@ test.describe('Vanni Phase 9 E2E (Two Browsers, Realtime, Groups, Security, Mobi
       miraRow.getByRole('button', { name: 'Remove member' }).click(),
     ])
     expect(delResp.status()).toBe(204)
-    await expect(pageC.getByText(/Welcome to Vanni/i)).toBeVisible({ timeout: 10000 })
+    await expect(pageC.getByRole('heading', { name: /Welcome to Vanni/i })).toBeVisible({ timeout: 10000 })
 
     // 7. Mobile 390px viewport check on Context B
     await pageB.setViewportSize({ width: 390, height: 844 })

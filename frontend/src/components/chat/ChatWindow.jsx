@@ -315,7 +315,7 @@ export default function ChatWindow({
         </div>
 
         <h2 className="text-2xl font-bold text-ink heading-tight mb-2">
-          Welcome to Vanni
+          Welcome to <span className="font-brand text-[28px] tracking-[-0.025em]">Vanni</span>
         </h2>
         <p className="text-sm text-ink-muted max-w-sm leading-relaxed mb-7">
           Select a chat from the sidebar or start a fresh conversation. Messages, groups, and media stay in sync in real time.

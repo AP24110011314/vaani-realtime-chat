@@ -236,7 +236,7 @@ describe('ChatWindow', () => {
       </QueryClientProvider>
     )
 
-    expect(screen.getByText(/Welcome to Vanni/i)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /Welcome to Vanni/i })).toBeInTheDocument()
     expect(screen.getByText(/Select a chat from the sidebar/i)).toBeInTheDocument()
   })
 })

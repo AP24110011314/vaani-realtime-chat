@@ -74,7 +74,7 @@ export default function ConversationList({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-2.5 space-y-2">
+    <div className="flex-1 overflow-y-auto px-3 py-2.5 space-y-2.5">
       {conversations.map((conv) => (
         <ConversationItem
           key={conv.id}

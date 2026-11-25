@@ -13,9 +13,9 @@ export default function VanniLogo({
   }
 
   const textSizes = {
-    sm: 'text-base',
-    md: 'text-lg',
-    lg: 'text-2xl',
+    sm: 'text-[19px] leading-none',
+    md: 'text-[22px] leading-none',
+    lg: 'text-[28px] leading-none',
   }
 
   return (
@@ -41,7 +41,7 @@ export default function VanniLogo({
       </span>
       {showWordmark && (
         <span
-          className={`${textSizes[size] || textSizes.md} font-bold tracking-tight text-ink`}
+          className={`${textSizes[size] || textSizes.md} font-brand font-bold tracking-[-0.025em] text-ink`}
         >
           Vanni
         </span>

@@ -83,8 +83,8 @@ export default function ConversationItem({
         onClick={onClick}
         className={`relative w-full flex items-center gap-3 p-3 rounded-2xl transition-all duration-150 text-left border cursor-pointer focus-accent ${
           isActive
-            ? 'glass-row-active text-ink'
-            : 'bg-transparent border-transparent glass-row-hover text-ink-muted'
+            ? 'glass-row-active text-ink pl-3.5'
+            : 'glass-row glass-row-hover text-ink-muted'
         }`}
       >
         {/* Active accent vertical pill bar */}
