@@ -35,6 +35,7 @@ export default function SettingsPage() {
 
   const [showLastSeen, setShowLastSeen] = useState(user?.showLastSeen ?? true)
   const [showReadReceipts, setShowReadReceipts] = useState(user?.showReadReceipts ?? true)
+  const [linkPreviewsEnabled, setLinkPreviewsEnabled] = useState(user?.linkPreviewsEnabled ?? true)
   const [isSavingPrivacy, setIsSavingPrivacy] = useState(false)
   const [privacySuccess, setPrivacySuccess] = useState('')
   const [privacyError, setPrivacyError] = useState('')
@@ -51,6 +52,7 @@ export default function SettingsPage() {
     setPrevUser(user)
     setShowLastSeen(user.showLastSeen ?? true)
     setShowReadReceipts(user.showReadReceipts ?? true)
+    setLinkPreviewsEnabled(user.linkPreviewsEnabled ?? true)
   }
 
   useEffect(() => {
@@ -120,6 +122,26 @@ export default function SettingsPage() {
       setTimeout(() => setPrivacySuccess(''), 3000)
     } catch {
       setShowReadReceipts(!nextVal)
+      setPrivacyError('Failed to update privacy setting.')
+    } finally {
+      setIsSavingPrivacy(false)
+    }
+  }
+
+  const handleToggleLinkPreviews = async () => {
+    const nextVal = !linkPreviewsEnabled
+    setLinkPreviewsEnabled(nextVal)
+    setIsSavingPrivacy(true)
+    setPrivacySuccess('')
+    setPrivacyError('')
+
+    try {
+      const updated = await authApi.updateMe({ linkPreviewsEnabled: nextVal })
+      updateUser(updated)
+      setPrivacySuccess('Privacy setting updated.')
+      setTimeout(() => setPrivacySuccess(''), 3000)
+    } catch {
+      setLinkPreviewsEnabled(!nextVal)
       setPrivacyError('Failed to update privacy setting.')
     } finally {
       setIsSavingPrivacy(false)
@@ -398,6 +420,34 @@ export default function SettingsPage() {
                   <span
                     className={`block w-4 h-4 rounded-full transition-transform absolute top-1 left-1 shadow-xs ${
                       showReadReceipts
+                        ? 'translate-x-6 bg-white dark:bg-[#031416]'
+                        : 'translate-x-0 bg-[var(--text-secondary)]'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between py-3.5">
+                <div className="pr-4">
+                  <h3 className="text-xs font-semibold text-ink">Show Link Previews</h3>
+                  <p className="text-[11px] text-ink-muted leading-snug mt-0.5">
+                    Display server-fetched title, description, and proxied thumbnails below links in chats.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleLinkPreviews}
+                  disabled={isSavingPrivacy}
+                  className={`w-12 h-6 rounded-full transition-all relative flex-shrink-0 focus-accent cursor-pointer ${
+                    linkPreviewsEnabled
+                      ? 'accent-badge shadow-xs'
+                      : 'glass-subtle'
+                  }`}
+                  aria-label="Toggle link previews"
+                >
+                  <span
+                    className={`block w-4 h-4 rounded-full transition-transform absolute top-1 left-1 shadow-xs ${
+                      linkPreviewsEnabled
                         ? 'translate-x-6 bg-white dark:bg-[#031416]'
                         : 'translate-x-0 bg-[var(--text-secondary)]'
                     }`}

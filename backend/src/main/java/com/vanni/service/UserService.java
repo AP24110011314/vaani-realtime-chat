@@ -61,6 +61,9 @@ public class UserService {
         if (req.showReadReceipts() != null) {
             user.setShowReadReceipts(req.showReadReceipts());
         }
+        if (req.linkPreviewsEnabled() != null) {
+            user.setLinkPreviewsEnabled(req.linkPreviewsEnabled());
+        }
 
         user = userRepository.save(user);
         if (profileChanged) {

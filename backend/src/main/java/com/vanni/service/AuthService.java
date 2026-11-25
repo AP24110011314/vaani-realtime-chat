@@ -208,7 +208,8 @@ public class AuthService {
             user.getAvatarUrl(),
             user.getAbout(),
             user.isShowLastSeen(),
-            user.isShowReadReceipts()
+            user.isShowReadReceipts(),
+            user.isLinkPreviewsEnabled()
         );
     }
 

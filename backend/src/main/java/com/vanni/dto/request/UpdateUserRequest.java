@@ -10,5 +10,10 @@ public record UpdateUserRequest(
     String about,
 
     Boolean showLastSeen,
-    Boolean showReadReceipts
-) {}
+    Boolean showReadReceipts,
+    Boolean linkPreviewsEnabled
+) {
+    public UpdateUserRequest(String name, String about, Boolean showLastSeen, Boolean showReadReceipts) {
+        this(name, about, showLastSeen, showReadReceipts, null);
+    }
+}

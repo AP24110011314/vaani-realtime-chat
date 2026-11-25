@@ -45,6 +45,7 @@ export default function MessageList({
   onReply,
   onEdit,
   onDelete,
+  onRemovePreviews,
   onToggleReaction,
   onSendQuickReply,
   highlightedMessageId,
@@ -309,6 +310,7 @@ export default function MessageList({
                 onReply={onReply}
                 onEdit={onEdit}
                 onDelete={onDelete}
+                onRemovePreviews={onRemovePreviews}
                 onToggleReaction={onToggleReaction}
                 onJumpToMessage={jumpToMessage}
                 onMentionClick={onMentionClick}

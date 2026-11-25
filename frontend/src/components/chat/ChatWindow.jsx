@@ -313,12 +313,23 @@ export default function ChatWindow({
       queryClient.setQueryData(['messages', conversationId], (old = []) =>
         old.map((m) =>
           m.id === message.id
-            ? { ...m, deleted: true, content: null, attachments: [] }
+            ? { ...m, deleted: true, content: null, attachments: [], previews: [] }
             : m
         )
       )
     } catch (err) {
       console.error('Failed to delete message', err)
+    }
+  }
+
+  const handleRemovePreviews = async (message) => {
+    try {
+      await messageApi.removePreviews(message.id)
+      queryClient.setQueryData(['messages', conversationId], (old = []) =>
+        old.map((m) => (m.id === message.id ? { ...m, previews: [] } : m))
+      )
+    } catch (err) {
+      console.error('Failed to remove previews', err)
     }
   }
 
@@ -441,6 +452,7 @@ export default function ChatWindow({
           onReply={(msg) => setReplyTo(msg)}
           onEdit={(msg) => setEditingMessage(msg)}
           onDelete={handleDeleteMessage}
+          onRemovePreviews={handleRemovePreviews}
           onToggleReaction={handleToggleReaction}
           onSendQuickReply={(text) => handleSendMessage(text)}
           highlightedMessageId={highlightedMessageId}

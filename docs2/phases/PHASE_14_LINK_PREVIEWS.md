@@ -45,11 +45,11 @@ Implement in one class `SafeHttpFetcher` and use it for **every** outbound fetch
 Unit: block-list for every range above, IPv6 and IPv4-mapped forms, decimal/octal/hex IP spellings (`http://2130706433/`), `localhost`, `0.0.0.0`, redirect to `http://169.254.169.254/`, redirect chain > 3, DNS rebinding simulation (resolver returns public IP first and private second: must be rejected), oversized body, non-HTML content type, slow response timeout, `file://`, `gopher://`, credentials in URL, non-80/443 ports. Integration: preview appears via event; cached second request does not refetch; disabled setting hides cards; deleted message shows no card. Use a local test HTTP server on a random port only with the SSRF check **disabled via a test-only flag**, never in production profile.
 
 ## Acceptance checklist
-- [ ] Sending a normal article URL produces a card within a few seconds for both users.
-- [ ] `http://localhost:8080/api/ping`, `http://127.0.0.1`, and `http://169.254.169.254` produce **no** preview and no server request is made.
-- [ ] No third-party image URL is ever requested by the browser (check DevTools network tab).
-- [ ] Failure of a slow/bad site never delays or breaks message delivery.
-- [ ] Setting and "remove preview" work.
+- [x] Sending a normal article URL produces a card within a few seconds for both users.
+- [x] `http://localhost:8080/api/ping`, `http://127.0.0.1`, and `http://169.254.169.254` produce **no** preview and no server request is made.
+- [x] No third-party image URL is ever requested by the browser (check DevTools network tab).
+- [x] Failure of a slow/bad site never delays or breaks message delivery.
+- [x] Setting and "remove preview" work.
 
 ## Commit
 ```bash

@@ -2,38 +2,25 @@ package com.vanni.service;
 
 import com.vanni.dto.request.SendMessageRequest;
 import com.vanni.dto.response.AttachmentDto;
+import com.vanni.dto.response.LinkPreviewDto;
 import com.vanni.dto.response.MentionDto;
 import com.vanni.dto.response.MessageDto;
 import com.vanni.dto.response.ReactionDto;
 import com.vanni.dto.response.ReplySnippet;
-import com.vanni.entity.Attachment;
-import com.vanni.entity.Conversation;
-import com.vanni.entity.ConversationMember;
-import com.vanni.entity.ConversationType;
-import com.vanni.entity.MemberRole;
-import com.vanni.entity.Message;
-import com.vanni.entity.MessageMention;
-import com.vanni.entity.MessageReceipt;
-import com.vanni.entity.MessageType;
-import com.vanni.entity.Reaction;
-import com.vanni.entity.User;
+import com.vanni.entity.*;
 import com.vanni.exception.ApiException;
-import com.vanni.repository.AttachmentRepository;
-import com.vanni.repository.ConversationMemberRepository;
-import com.vanni.repository.ConversationRepository;
-import com.vanni.repository.MessageMentionRepository;
-import com.vanni.repository.MessageReceiptRepository;
-import com.vanni.repository.MessageRepository;
-import com.vanni.repository.ReactionRepository;
-import com.vanni.repository.UserRepository;
+import com.vanni.repository.*;
 import com.vanni.security.RateLimiterService;
 import com.vanni.storage.StorageService;
 import com.vanni.util.MentionParser;
+import com.vanni.util.UrlExtractor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -63,6 +50,8 @@ public class MessageService {
     private final com.vanni.repository.BlockRepository blockRepository;
     private final MessageMentionRepository messageMentionRepository;
     private final RateLimiterService rateLimiterService;
+    private final MessageLinkPreviewRepository messageLinkPreviewRepository;
+    private final LinkPreviewService linkPreviewService;
 
     public MessageService(
             MessageRepository messageRepository,
@@ -79,7 +68,9 @@ public class MessageService {
             StorageService storageService,
             com.vanni.repository.BlockRepository blockRepository,
             MessageMentionRepository messageMentionRepository,
-            RateLimiterService rateLimiterService) {
+            RateLimiterService rateLimiterService,
+            MessageLinkPreviewRepository messageLinkPreviewRepository,
+            @org.springframework.context.annotation.Lazy LinkPreviewService linkPreviewService) {
         this.messageRepository = messageRepository;
         this.conversationRepository = conversationRepository;
         this.conversationMemberRepository = conversationMemberRepository;
@@ -95,6 +86,8 @@ public class MessageService {
         this.blockRepository = blockRepository;
         this.messageMentionRepository = messageMentionRepository;
         this.rateLimiterService = rateLimiterService;
+        this.messageLinkPreviewRepository = messageLinkPreviewRepository;
+        this.linkPreviewService = linkPreviewService;
     }
 
     public MessageDto send(Long conversationId, Long senderId, SendMessageRequest req) {
@@ -264,7 +257,12 @@ public class MessageService {
             eventPublisher.sendToUser(recipientId, "message.created", recipientDto);
         }
 
-        return senderDto != null ? senderDto : toDtoWithStatus(message, "SENT", attachmentDtos, List.of(), mentionDtos, false, false);
+        if (messageType != MessageType.VOICE && !content.isEmpty() && UrlExtractor.extractFirstUrl(content).isPresent()) {
+            Long savedMsgId = message.getId();
+            runAfterCommit(() -> linkPreviewService.processMessageAsync(savedMsgId, senderId));
+        }
+
+        return senderDto != null ? senderDto : toDtoWithStatus(message, "SENT", attachmentDtos, List.of(), mentionDtos, false, false, List.of());
     }
 
     public MessageDto editMessage(Long messageId, Long userId, String newContent) {
@@ -316,10 +314,23 @@ public class MessageService {
             }
         }
 
+        Optional<String> oldUrl = UrlExtractor.extractFirstUrl(message.getContent());
+        Optional<String> newUrl = UrlExtractor.extractFirstUrl(trimmed);
+        boolean urlChanged = !oldUrl.equals(newUrl);
+
         message.setContent(trimmed);
         message.setMentionsAll(parseResult.mentionsAll());
         message.setEditedAt(Instant.now());
         message = messageRepository.save(message);
+
+        if (urlChanged) {
+            messageLinkPreviewRepository.deleteByMessageId(messageId);
+            messageLinkPreviewRepository.flush();
+            if (newUrl.isPresent()) {
+                Long savedMsgId = message.getId();
+                runAfterCommit(() -> linkPreviewService.processMessageAsync(savedMsgId, userId));
+            }
+        }
 
         // Rebuild message_mentions without re-notifying
         messageMentionRepository.deleteByMessageId(messageId);
@@ -364,6 +375,7 @@ public class MessageService {
         message.setDeletedAt(Instant.now());
         message.setContent(null);
         messageRepository.save(message);
+        messageLinkPreviewRepository.deleteByMessageId(messageId);
 
         // Delete attachments from storage and repository
         List<Attachment> attachments = attachmentRepository.findByMessageId(messageId);
@@ -466,6 +478,13 @@ public class MessageService {
                 Collectors.mapping(mm -> new MentionDto(mm.getUser().getId(), mm.getUser().getName()), Collectors.toList())
             ));
 
+        Map<Long, List<LinkPreviewDto>> previewsByMsgId = messageLinkPreviewRepository.findByMessageIdsWithPreview(messageIds).stream()
+            .filter(mlp -> LinkPreviewService.toDto(mlp.getPreview()) != null)
+            .collect(Collectors.groupingBy(
+                mlp -> mlp.getMessage().getId(),
+                Collectors.mapping(mlp -> LinkPreviewService.toDto(mlp.getPreview()), Collectors.toList())
+            ));
+
         return messages.stream()
             .map(m -> {
                 List<MentionDto> msgMentions = mentionsByMsgId.getOrDefault(m.getId(), List.of());
@@ -477,7 +496,8 @@ public class MessageService {
                     aggregateReactions(reactionsByMsgId.getOrDefault(m.getId(), List.of()), userId),
                     msgMentions,
                     mentionsMe,
-                    false
+                    false,
+                    previewsByMsgId.getOrDefault(m.getId(), List.of())
                 );
             })
             .toList();
@@ -565,8 +585,14 @@ public class MessageService {
         List<ReactionDto> reactionDtos = aggregateReactions(reactions, viewerUserId);
         List<MentionDto> mentions = toMentionDtos(messageMentionRepository.findByMessageIdWithUser(message.getId()));
         boolean mentionsMe = isMentionedViewer(message, mentions, viewerUserId);
+        List<LinkPreviewDto> previews = message.getDeletedAt() == null
+            ? messageLinkPreviewRepository.findByMessageIdWithPreview(message.getId()).stream()
+                .map(mlp -> LinkPreviewService.toDto(mlp.getPreview()))
+                .filter(java.util.Objects::nonNull)
+                .toList()
+            : List.of();
 
-        return toDtoWithStatus(message, status, attachments, reactionDtos, mentions, mentionsMe, notify);
+        return toDtoWithStatus(message, status, attachments, reactionDtos, mentions, mentionsMe, notify, previews);
     }
 
     public MessageDto toDtoWithStatus(Message message, String status) {
@@ -582,7 +608,7 @@ public class MessageService {
             String status,
             List<AttachmentDto> attachments,
             List<ReactionDto> reactions) {
-        return toDtoWithStatus(message, status, attachments, reactions, List.of(), false, false);
+        return toDtoWithStatus(message, status, attachments, reactions, List.of(), false, false, List.of());
     }
 
     public MessageDto toDtoWithStatus(
@@ -593,6 +619,18 @@ public class MessageService {
             List<MentionDto> mentions,
             boolean mentionsMe,
             boolean notify) {
+        return toDtoWithStatus(message, status, attachments, reactions, mentions, mentionsMe, notify, List.of());
+    }
+
+    public MessageDto toDtoWithStatus(
+            Message message,
+            String status,
+            List<AttachmentDto> attachments,
+            List<ReactionDto> reactions,
+            List<MentionDto> mentions,
+            boolean mentionsMe,
+            boolean notify,
+            List<LinkPreviewDto> previews) {
         List<MentionDto> safeMentions = mentions != null ? mentions : List.of();
         Map<Long, String> namesById = new HashMap<>();
         for (MentionDto md : safeMentions) {
@@ -652,8 +690,22 @@ public class MessageService {
             message.isMentionsAll(),
             mentionsMe,
             notify,
-            previewText
+            previewText,
+            message.getDeletedAt() == null && previews != null ? previews : List.of()
         );
+    }
+
+    private void runAfterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+        } else {
+            action.run();
+        }
     }
 
     private List<MentionDto> toMentionDtos(List<MessageMention> mentions) {

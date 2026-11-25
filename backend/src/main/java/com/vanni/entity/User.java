@@ -41,6 +41,10 @@ public class User {
     @Builder.Default
     private boolean showReadReceipts = true;
 
+    @Column(name = "link_previews_enabled", nullable = false)
+    @Builder.Default
+    private boolean linkPreviewsEnabled = true;
+
     @Column(nullable = false)
     @Builder.Default
     private boolean enabled = true;

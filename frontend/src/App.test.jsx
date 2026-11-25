@@ -1708,4 +1708,107 @@ describe('Phase 5 Groups, Presence & System Messages', () => {
       }
     })
   })
+
+  describe('Phase 14: Link Previews', () => {
+    it('renders linkified URL safely, shows LinkPreviewCard, and allows sender to remove preview', () => {
+      const onRemove = vi.fn()
+      const msg = {
+        id: 501,
+        content: 'Read this article: https://news.example.com/posts/glass-ui-benchmarks-and-notes.',
+        type: 'TEXT',
+        createdAt: '2026-11-26T00:00:00Z',
+        sender: { id: 1, name: 'Asha' },
+        previews: [
+          {
+            id: 12,
+            url: 'https://news.example.com/posts/glass-ui-benchmarks-and-notes',
+            finalUrl: 'https://news.example.com/posts/glass-ui-benchmarks-and-notes',
+            siteName: 'News Example',
+            title: 'Glass UI Launch',
+            description: 'Benchmarks and architecture details.',
+            imageUrl: '/api/previews/12/image',
+            imageWidth: 600,
+            imageHeight: 300,
+          },
+        ],
+      }
+
+      render(
+        <AuthContext.Provider value={{ user: { id: 1, name: 'Asha', linkPreviewsEnabled: true } }}>
+          <MessageBubble message={msg} isMine={true} onRemovePreviews={onRemove} />
+        </AuthContext.Provider>
+      )
+
+      // Host linkified cleanly with trailing period kept outside href + rel security attributes
+      const inlineLink = screen.getByRole('link', { name: /news\.example\.com/i })
+      expect(inlineLink).toHaveAttribute('href', 'https://news.example.com/posts/glass-ui-benchmarks-and-notes')
+      expect(inlineLink).toHaveAttribute('rel', expect.stringContaining('noopener'))
+
+      // Card renders image ONLY from proxied /api/previews/{id}/image
+      const img = screen.getByAltText('Glass UI Launch')
+      expect(img).toHaveAttribute('src', '/api/previews/12/image')
+      expect(screen.getByText('News Example')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Remove preview' }))
+      expect(onRemove).toHaveBeenCalledWith(msg)
+    })
+
+    it('hides preview cards when linkPreviewsEnabled is false and persists setting toggle', async () => {
+      const updateMeSpy = vi.spyOn(authApi, 'updateMe').mockResolvedValueOnce({
+        id: 1,
+        name: 'Asha',
+        email: 'asha@vanni.app',
+        showLastSeen: true,
+        showReadReceipts: true,
+        linkPreviewsEnabled: false,
+      })
+      const blockedSpy = vi.spyOn(userApi, 'getBlocked').mockResolvedValueOnce([])
+
+      const msg = {
+        id: 502,
+        content: 'Check https://example.com',
+        type: 'TEXT',
+        createdAt: '2026-11-26T00:00:00Z',
+        sender: { id: 2, name: 'Ravi' },
+        previews: [
+          { id: 13, url: 'https://example.com', title: 'Hidden Title', siteName: 'Example' },
+        ],
+      }
+
+      const { unmount } = render(
+        <AuthContext.Provider value={{ user: { id: 1, name: 'Asha', linkPreviewsEnabled: false } }}>
+          <MessageBubble message={msg} isMine={false} />
+        </AuthContext.Provider>
+      )
+      expect(screen.queryByText('Hidden Title')).not.toBeInTheDocument()
+      unmount()
+
+      const mockUpdateUser = vi.fn()
+      render(
+        <ThemeProvider>
+          <AuthContext.Provider
+            value={{
+              user: { id: 1, name: 'Asha', email: 'asha@vanni.app', showLastSeen: true, showReadReceipts: true, linkPreviewsEnabled: true },
+              updateUser: mockUpdateUser,
+              logout: vi.fn(),
+            }}
+          >
+            <MemoryRouter>
+              <SettingsPage />
+            </MemoryRouter>
+          </AuthContext.Provider>
+        </ThemeProvider>
+      )
+
+      const lpToggle = screen.getByRole('button', { name: 'Toggle link previews' })
+      fireEvent.click(lpToggle)
+      await waitFor(() => {
+        expect(updateMeSpy).toHaveBeenCalledWith({ linkPreviewsEnabled: false })
+        expect(mockUpdateUser).toHaveBeenCalled()
+      })
+
+      updateMeSpy.mockRestore()
+      blockedSpy.mockRestore()
+    })
+  })
 })

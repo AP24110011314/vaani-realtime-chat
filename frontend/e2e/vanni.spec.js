@@ -274,8 +274,9 @@ test.describe('Vanni Phase 9 E2E (Two Browsers, Realtime, Groups, Security, Mobi
 
     // 6d. Phase 13 Voice Messages flow (Chrome fake audio stream): record ~1.6s, send, recipient plays & cycles speed
     await pageA.getByRole('button', { name: 'Record voice message' }).click()
-    await expect(pageA.getByRole('region', { name: 'Voice message recorder' })).toBeVisible({ timeout: 5000 })
-    await pageA.waitForTimeout(1600)
+    const voiceRegion = pageA.getByRole('region', { name: 'Voice message recorder' })
+    await expect(voiceRegion).toBeVisible({ timeout: 5000 })
+    await expect(voiceRegion).toContainText(/0:0[2-9]/, { timeout: 8000 })
     await pageA.getByRole('button', { name: 'Send voice message' }).click()
 
     await expect(pageA.getByRole('log').getByRole('button', { name: 'Play voice message' }).first()).toBeVisible({ timeout: 10000 })
@@ -284,6 +285,14 @@ test.describe('Vanni Phase 9 E2E (Two Browsers, Realtime, Groups, Security, Mobi
     await voicePlayBtnB.click()
     await pageB.getByRole('log').getByRole('button', { name: /Playback speed 1x/i }).first().click()
     await expect(pageB.getByRole('log').getByRole('button', { name: /Playback speed 1\.5x/i }).first()).toBeVisible()
+
+    // 6e. Phase 14 SSRF protection check: blocked metadata/loopback URLs deliver immediately as safe links with zero preview cards
+    const ssrfUrl = 'http://169.254.169.254/latest/meta-data'
+    await pageA.getByPlaceholder(/@ to mention/i).fill(`Do not fetch ${ssrfUrl}`)
+    await pageA.getByPlaceholder(/@ to mention/i).press('Enter')
+    await expect(pageA.getByRole('log').getByRole('link', { name: /169\.254\.169\.254/i })).toBeVisible({ timeout: 10000 })
+    await pageA.waitForTimeout(500)
+    await expect(pageA.getByRole('log').getByRole('img', { name: /Link preview image/i })).toHaveCount(0)
 
     // 7. Mobile 390px viewport check on Context B
     await pageB.setViewportSize({ width: 390, height: 844 })
@@ -302,6 +311,7 @@ test.describe('Vanni Phase 9 E2E (Two Browsers, Realtime, Groups, Security, Mobi
     // Verify Light / Dark theme toggle visibly updates the document and persists
     await pageA.goto('/settings')
     await expect(pageA.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible()
+    await expect(pageA.getByRole('button', { name: 'Toggle link previews' })).toBeVisible()
     await pageA.getByRole('button', { name: 'Dark', exact: true }).click()
     await expect(pageA.locator('html')).toHaveClass(/\bdark\b/)
 

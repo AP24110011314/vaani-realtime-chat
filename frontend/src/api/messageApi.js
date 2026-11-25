@@ -10,12 +10,13 @@ export const messageApi = {
     })
     return res.data
   },
-  send: async (conversationId, { content, clientMessageId, replyToId, attachmentIds }) => {
+  send: async (conversationId, { content, clientMessageId, replyToId, attachmentIds, type }) => {
     const res = await http.post(`/conversations/${conversationId}/messages`, {
       content,
       clientMessageId,
       replyToId,
       attachmentIds,
+      ...(type ? { type } : {}),
     })
     return res.data
   },
@@ -25,6 +26,9 @@ export const messageApi = {
   },
   delete: async (id) => {
     await http.delete(`/messages/${id}`)
+  },
+  removePreviews: async (id) => {
+    await http.delete(`/messages/${id}/previews`)
   },
   react: async (id, emoji) => {
     const res = await http.put(`/messages/${id}/reactions`, { emoji })

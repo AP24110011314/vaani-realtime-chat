@@ -23,7 +23,8 @@ public record MessageDto(
     boolean mentionsAll,
     boolean mentionsMe,
     @JsonProperty("notify") boolean shouldNotify,
-    String previewText
+    String previewText,
+    List<LinkPreviewDto> previews
 ) {
     public MessageDto(
         Long id,
@@ -40,10 +41,29 @@ public record MessageDto(
         Instant editedAt,
         boolean deleted
     ) {
-        this(
-            id, conversationId, sender, clientMessageId, content, type,
-            replyTo, attachments, reactions, status, createdAt, editedAt, deleted,
-            List.of(), false, false, true, content
-        );
+        this(id, conversationId, sender, clientMessageId, content, type, replyTo, attachments, reactions, status, createdAt, editedAt, deleted, List.of(), false, false, true, content, List.of());
+    }
+
+    public MessageDto(
+        Long id,
+        Long conversationId,
+        UserSummaryResponse sender,
+        String clientMessageId,
+        String content,
+        MessageType type,
+        ReplySnippet replyTo,
+        List<AttachmentDto> attachments,
+        List<ReactionDto> reactions,
+        String status,
+        Instant createdAt,
+        Instant editedAt,
+        boolean deleted,
+        List<MentionDto> mentions,
+        boolean mentionsAll,
+        boolean mentionsMe,
+        boolean shouldNotify,
+        String previewText
+    ) {
+        this(id, conversationId, sender, clientMessageId, content, type, replyTo, attachments, reactions, status, createdAt, editedAt, deleted, mentions, mentionsAll, mentionsMe, shouldNotify, previewText, List.of());
     }
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useContext } from 'react'
 import { createPortal } from 'react-dom'
 import { formatTime } from '../../lib/formatters'
 import {
@@ -12,9 +12,12 @@ import {
   Reply,
   Smile,
   Info,
+  Link2Off,
 } from 'lucide-react'
+import { AuthContext } from '../../context/AuthContext'
 import AttachmentPreview from './AttachmentPreview'
 import VoicePlayer from './VoicePlayer'
+import LinkPreviewCard from './LinkPreviewCard'
 
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏']
 
@@ -39,26 +42,61 @@ function findCodeRanges(text) {
   return ranges
 }
 
+function splitTrailingUrlPunctuation(rawUrl) {
+  let url = rawUrl
+  let trailing = ''
+  while (url.length > 0) {
+    const last = url[url.length - 1]
+    if ('.,;!?\'"]}'.includes(last)) {
+      trailing = last + trailing
+      url = url.slice(0, -1)
+    } else if (last === ')' && (url.match(/\(/g)?.length || 0) < (url.match(/\)/g)?.length || 0)) {
+      trailing = ')' + trailing
+      url = url.slice(0, -1)
+    } else {
+      break
+    }
+  }
+  return { url, trailing }
+}
+
+function formatDisplayUrl(href) {
+  if (href.length <= 55) return href
+  try {
+    const parsed = new URL(href)
+    const rest = `${parsed.pathname}${parsed.search}`
+    const shortRest = rest.length > 24 ? `${rest.slice(0, 22)}…` : rest
+    return `${parsed.host}${shortRest === '/' ? '' : shortRest}`
+  } catch {
+    return `${href.slice(0, 52)}…`
+  }
+}
+
 function renderTextSegment(segment, isMine, mentionsById, mentionsAll, onMentionClick, keyPrefix) {
-  const tokenRegex = /(https?:\/\/[^\s]+|<@(?:\d+|all)>)/g
+  const tokenRegex = /(https?:\/\/[^\s<>]+|<@(?:\d+|all)>)/g
   const parts = segment.split(tokenRegex)
 
   return parts.map((part, i) => {
     if (!part) return null
-    if (/^https?:\/\/[^\s]+$/.test(part)) {
+    if (/^https?:\/\/[^\s<>]+$/.test(part)) {
+      const { url, trailing } = splitTrailingUrlPunctuation(part)
+      if (!url) return part
       return (
-        <a
-          key={`${keyPrefix}-url-${i}`}
-          href={part}
-          target="_blank"
-          rel="noopener noreferrer nofollow"
-          className={`underline break-all font-medium ${
-            isMine ? 'opacity-95 hover:opacity-100' : 'text-accent-text hover:opacity-80'
-          }`}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {part}
-        </a>
+        <span key={`${keyPrefix}-url-${i}`}>
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer nofollow"
+            title={url}
+            className={`underline break-all font-medium ${
+              isMine ? 'opacity-95 hover:opacity-100' : 'text-accent-text hover:opacity-80'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {formatDisplayUrl(url)}
+          </a>
+          {trailing}
+        </span>
       )
     }
 
@@ -159,10 +197,13 @@ export default function MessageBubble({
   onReply,
   onEdit,
   onDelete,
+  onRemovePreviews,
   onToggleReaction,
   onJumpToMessage,
   onMentionClick,
 }) {
+  const authContext = useContext(AuthContext)
+  const linkPreviewsEnabled = authContext?.user?.linkPreviewsEnabled ?? true
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -321,6 +362,19 @@ export default function MessageBubble({
             </button>
           )}
 
+          {/* Remove link preview (sender only) */}
+          {isMine && !isDeleted && !isPending && Array.isArray(message.previews) && message.previews.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onRemovePreviews?.(message)}
+              className="p-1.5 hover:text-[var(--warning-text)] hover:bg-[var(--glass-bg-hover)] rounded-full transition-colors focus-accent cursor-pointer"
+              title="Remove link preview"
+              aria-label="Remove preview"
+            >
+              <Link2Off className="w-3.5 h-3.5" />
+            </button>
+          )}
+
           {/* Delete (if sender or group admin) */}
           {canDelete && (
             <button
@@ -412,6 +466,18 @@ export default function MessageBubble({
             )}
           </p>
         ) : null}
+
+        {/* Link Previews (only when user preference is enabled and message not deleted) */}
+        {linkPreviewsEnabled &&
+          !isDeleted &&
+          Array.isArray(message.previews) &&
+          message.previews.length > 0 && (
+            <div>
+              {message.previews.map((lp) => (
+                <LinkPreviewCard key={lp.id || lp.url} preview={lp} isMine={isMine} />
+              ))}
+            </div>
+          )}
 
         {/* Footer timestamp & status indicators inside bubble bottom-right */}
         <div

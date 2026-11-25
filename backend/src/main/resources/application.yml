@@ -30,6 +30,8 @@ cookie:
 app:
   allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5173,http://localhost:8080,http://127.0.0.1:5173}
   frontend-url: ${FRONTEND_URL:http://localhost:5173}
+  link-previews:
+    allow-localhost-for-tests: false
 
 storage:
   provider: ${STORAGE_PROVIDER:local}
