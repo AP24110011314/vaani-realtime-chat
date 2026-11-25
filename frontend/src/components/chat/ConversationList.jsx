@@ -8,6 +8,7 @@ export default function ConversationList({
   onOpenNewChat,
   isLoading,
   currentUserId,
+  onUpdateSettings,
 }) {
   if (isLoading) {
     return (
@@ -57,6 +58,7 @@ export default function ConversationList({
           isActive={String(conv.id) === String(activeId)}
           onClick={() => onSelectConversation(conv.id)}
           currentUserId={currentUserId}
+          onUpdateSettings={onUpdateSettings}
         />
       ))}
     </div>

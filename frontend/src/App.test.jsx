@@ -9,6 +9,7 @@ import RegisterPage from './pages/RegisterPage'
 import AppRoutes from './routes/AppRoutes'
 import MessageComposer from './components/chat/MessageComposer'
 import ConversationList from './components/chat/ConversationList'
+import ConversationItem from './components/chat/ConversationItem'
 import ChatWindow from './components/chat/ChatWindow'
 import ConnectionBanner from './components/common/ConnectionBanner'
 import MessageBubble from './components/chat/MessageBubble'
@@ -22,6 +23,10 @@ import Sidebar from './components/chat/Sidebar'
 import AttachmentPreview from './components/chat/AttachmentPreview'
 import UserAvatar from './components/common/UserAvatar'
 import ProfilePage from './pages/ProfilePage'
+import SettingsPage from './pages/SettingsPage'
+import { ThemeProvider } from './context/ThemeContext'
+import { userApi } from './api/userApi'
+import { authApi } from './api/authApi'
 import * as useSocketModule from './hooks/useSocket'
 
 function createTestQueryClient() {
@@ -806,6 +811,200 @@ describe('Phase 5 Groups, Presence & System Messages', () => {
       expect(screen.getByPlaceholderText(/Enter your current password/i)).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Save Changes/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Update Password/i })).toBeInTheDocument()
+    })
+  })
+
+  describe('Phase 8 Enhancements & Settings', () => {
+    it('renders reactions pills and triggers reaction toggle on click in MessageBubble', () => {
+      const mockToggle = vi.fn()
+      const msg = {
+        id: 101,
+        content: 'Check out the new feature',
+        createdAt: '2026-11-25T01:00:00Z',
+        sender: { id: 2, name: 'Bob' },
+        reactions: [
+          { emoji: '👍', count: 2, reactedByMe: true },
+          { emoji: '❤️', count: 1, reactedByMe: false },
+        ],
+      }
+
+      render(
+        <MessageBubble
+          message={msg}
+          isMine={false}
+          onToggleReaction={mockToggle}
+        />
+      )
+
+      expect(screen.getByText('👍')).toBeInTheDocument()
+      expect(screen.getByText('2')).toBeInTheDocument()
+      expect(screen.getByText('❤️')).toBeInTheDocument()
+      expect(screen.getByText('1')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByText('👍'))
+      expect(mockToggle).toHaveBeenCalledWith(msg, '👍')
+    })
+
+    it('renders edited label when message has editedAt timestamp', () => {
+      const msg = {
+        id: 102,
+        content: 'Corrected text',
+        createdAt: '2026-11-25T01:00:00Z',
+        editedAt: '2026-11-25T01:05:00Z',
+        sender: { id: 1 },
+      }
+
+      render(<MessageBubble message={msg} isMine={true} />)
+      expect(screen.getByText('edited')).toBeInTheDocument()
+      expect(screen.getByText('Corrected text')).toBeInTheDocument()
+    })
+
+    it('renders deleted message placeholder and suppresses content', () => {
+      const msg = {
+        id: 103,
+        content: null,
+        deleted: true,
+        createdAt: '2026-11-25T01:00:00Z',
+        sender: { id: 1 },
+      }
+
+      render(<MessageBubble message={msg} isMine={true} />)
+      expect(screen.getByText('This message was deleted')).toBeInTheDocument()
+    })
+
+    it('renders quoted reply preview in MessageBubble and jumps on click', () => {
+      const mockJump = vi.fn()
+      const msg = {
+        id: 104,
+        content: 'Yes, absolutely!',
+        createdAt: '2026-11-25T01:00:00Z',
+        sender: { id: 2, name: 'Bob' },
+        replyTo: {
+          id: 50,
+          senderName: 'Alice',
+          snippet: 'Should we launch today?',
+        },
+      }
+
+      render(<MessageBubble message={msg} isMine={false} onJumpToMessage={mockJump} />)
+      expect(screen.getByText('Alice')).toBeInTheDocument()
+      expect(screen.getByText('Should we launch today?')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByText('Should we launch today?'))
+      expect(mockJump).toHaveBeenCalledWith(50)
+    })
+
+    it('renders reply preview banner in MessageComposer and cancels on X click', () => {
+      const mockCancel = vi.fn()
+      const replyTo = {
+        id: 50,
+        senderName: 'Alice',
+        snippet: 'Original question',
+      }
+
+      render(
+        <MessageComposer
+          onSendMessage={vi.fn()}
+          disabled={false}
+          replyTo={replyTo}
+          onCancelReply={mockCancel}
+        />
+      )
+
+      expect(screen.getByText(/Replying to Alice/i)).toBeInTheDocument()
+      expect(screen.getByText('Original question')).toBeInTheDocument()
+
+      const cancelBtn = screen.getByTitle('Cancel reply')
+      fireEvent.click(cancelBtn)
+      expect(mockCancel).toHaveBeenCalled()
+    })
+
+    it('renders pinned and muted icons and action menu in ConversationItem', () => {
+      const mockUpdateSettings = vi.fn()
+      const conv = {
+        id: 77,
+        type: 'DIRECT',
+        title: 'Priority Work',
+        pinned: true,
+        muted: true,
+        archived: false,
+        lastMessage: { content: 'Urgent task', createdAt: '2026-11-25T02:00:00Z' },
+        unreadCount: 0,
+        members: [],
+      }
+
+      render(
+        <ConversationItem
+          conversation={conv}
+          isActive={false}
+          onClick={vi.fn()}
+          currentUserId={1}
+          onUpdateSettings={mockUpdateSettings}
+        />
+      )
+
+      expect(screen.getByText('Priority Work')).toBeInTheDocument()
+
+      // Open context menu
+      const menuBtn = screen.getByLabelText('Chat options')
+      fireEvent.click(menuBtn)
+
+      expect(screen.getByText('Unpin chat')).toBeInTheDocument()
+      expect(screen.getByText('Unmute chat')).toBeInTheDocument()
+      expect(screen.getByText('Archive chat')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByText('Unpin chat'))
+      expect(mockUpdateSettings).toHaveBeenCalledWith(77, { pinned: false })
+    })
+
+    it('renders SettingsPage with theme options, privacy settings, blocked users, and session logout', async () => {
+      vi.spyOn(userApi, 'getBlocked').mockResolvedValue([
+        { id: 99, name: 'Spam User', email: 'spam@bad.app', avatarUrl: null },
+      ])
+      const mockUnblock = vi.spyOn(userApi, 'unblock').mockResolvedValue({})
+      vi.spyOn(authApi, 'logoutAll').mockResolvedValue({})
+
+      const mockUser = {
+        id: 1,
+        name: 'Alice Wonder',
+        email: 'alice@vanni.app',
+        showLastSeen: true,
+        showReadReceipts: true,
+      }
+
+      render(
+        <MemoryRouter>
+          <ThemeProvider>
+            <AuthContext.Provider value={{ user: mockUser, updateUser: vi.fn(), logout: vi.fn() }}>
+              <SettingsPage />
+            </AuthContext.Provider>
+          </ThemeProvider>
+        </MemoryRouter>
+      )
+
+      expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument()
+      expect(screen.getByText('Theme Appearance')).toBeInTheDocument()
+      expect(screen.getByText('Desktop Notifications')).toBeInTheDocument()
+      expect(screen.getByText('Privacy Settings')).toBeInTheDocument()
+      expect(screen.getByText('Blocked Users')).toBeInTheDocument()
+      expect(screen.getByText('Account Sessions')).toBeInTheDocument()
+
+      // Wait for blocked user to load
+      await waitFor(() => {
+        expect(screen.getByText('Spam User')).toBeInTheDocument()
+      })
+
+      // Click Unblock
+      const unblockBtn = screen.getByRole('button', { name: /Unblock/i })
+      fireEvent.click(unblockBtn)
+      await waitFor(() => {
+        expect(mockUnblock).toHaveBeenCalledWith(99)
+      })
+
+      // Theme toggle buttons
+      expect(screen.getByRole('button', { name: /Light/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Dark/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /System/i })).toBeInTheDocument()
     })
   })
 })

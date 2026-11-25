@@ -20,13 +20,19 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
   const [isLoadingOlder, setIsLoadingOlder] = useState(false)
   const [showGroupInfo, setShowGroupInfo] = useState(false)
   const [receiptModalMessage, setReceiptModalMessage] = useState(null)
+  const [replyTo, setReplyTo] = useState(null)
+  const [editingMessage, setEditingMessage] = useState(null)
+  const [highlightedMessageId, setHighlightedMessageId] = useState(null)
   const [prevConversationId, setPrevConversationId] = useState(conversationId)
   const pendingTimersRef = useRef(new Map())
 
-  // Reset group info panel if active conversation changes
+  // Reset local state if active conversation changes
   if (conversationId !== prevConversationId) {
     setPrevConversationId(conversationId)
     setShowGroupInfo(false)
+    setReplyTo(null)
+    setEditingMessage(null)
+    setHighlightedMessageId(null)
   }
 
   // Register active conversation with socket for events & catch-up
@@ -75,21 +81,25 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
   // Combined messages: olderMessages + latestMessages sorted ascending by id / createdAt
   const mergedMessages = useMemo(() => {
     const map = new Map()
-    // Put older messages in map
     olderMessages.forEach((m) => {
       map.set(m.id || m.clientMessageId, m)
     })
-    // Put latest messages in map
     latestMessages.forEach((m) => {
       map.set(m.id || m.clientMessageId, m)
     })
 
-    // Sort ascending by ID / createdAt
     return Array.from(map.values()).sort((a, b) => {
       if (a.id && b.id) return a.id - b.id
       return new Date(a.createdAt) - new Date(b.createdAt)
     })
   }, [olderMessages, latestMessages])
+
+  // Is current user admin in this group
+  const isGroupAdmin = useMemo(() => {
+    if (!conversation || conversation.type !== 'GROUP') return false
+    const myMember = conversation.members?.find((m) => m.id === currentUserId)
+    return myMember?.role === 'ADMIN'
+  }, [conversation, currentUserId])
 
   // Load older messages (cursor before)
   const loadOlderMessages = useCallback(async () => {
@@ -103,30 +113,20 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
         before: oldest.id,
         size: 30,
       })
-      if (older.length < 30) {
+      if (!older || older.length === 0) {
         setHasOlder(false)
+      } else {
+        setOlderMessages((prev) => [...older, ...prev])
       }
-      setOlderMessages((prev) => [...older, ...prev])
     } catch {
-      // Keep existing
+      // Error loading older
     } finally {
       setIsLoadingOlder(false)
     }
   }, [conversationId, isLoadingOlder, hasOlder, mergedMessages])
 
-  // Core send message logic supporting STOMP and REST fallback with 10s retry timeout
   const executeSend = useCallback(
-    async (content, clientMessageId, attachmentIds = []) => {
-      const hasContent = Boolean(content && content.trim())
-      const hasAttachments = Boolean(attachmentIds && attachmentIds.length > 0)
-      if (!conversationId || (!hasContent && !hasAttachments)) return
-
-      // Cancel any existing timer for this clientMessageId
-      if (pendingTimersRef.current.has(clientMessageId)) {
-        clearTimeout(pendingTimersRef.current.get(clientMessageId))
-        pendingTimersRef.current.delete(clientMessageId)
-      }
-
+    async ({ content, clientMessageId, attachmentIds = [], replyToId = null }) => {
       // Optimistic update
       queryClient.setQueryData(['messages', conversationId], (old = []) => {
         const existingIdx = old.findIndex(
@@ -137,13 +137,24 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
             idx === existingIdx ? { ...m, pending: true, failed: false } : m
           )
         }
+        let replySnippet = null
+        if (replyTo) {
+          replySnippet = {
+            id: replyTo.id,
+            senderName: replyTo.sender?.name || replyTo.senderName || '',
+            snippet: replyTo.snippet || replyTo.content || '',
+          }
+        }
+
         const optimisticMsg = {
           id: null,
           conversationId: Number(conversationId),
           content: content ? content.trim() : null,
           clientMessageId,
           sender: { id: currentUserId },
+          replyTo: replySnippet,
           attachments: [],
+          reactions: [],
           isMine: true,
           pending: true,
           failed: false,
@@ -172,6 +183,7 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
           conversationId: Number(conversationId),
           content: content ? content.trim() : '',
           clientMessageId,
+          replyToId,
           attachmentIds,
         })
         if (published) {
@@ -184,6 +196,7 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
         const saved = await messageApi.send(conversationId, {
           content: content ? content.trim() : '',
           clientMessageId,
+          replyToId,
           attachmentIds,
         })
         clearTimeout(timeoutId)
@@ -210,17 +223,69 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
         )
       }
     },
-    [conversationId, currentUserId, isConnected, queryClient, sendMessage]
+    [conversationId, currentUserId, isConnected, queryClient, sendMessage, replyTo]
   )
 
-  const handleSendMessage = (content, attachmentIds = []) => {
+  const handleSendMessage = (contentOrPayload, attachmentIds = [], replyToId = null) => {
+    let c = contentOrPayload
+    let a = attachmentIds
+    let r = replyToId
+    if (typeof contentOrPayload === 'object' && contentOrPayload !== null) {
+      c = contentOrPayload.content
+      a = contentOrPayload.attachmentIds || []
+      r = contentOrPayload.replyToId || null
+    }
     const clientMessageId = crypto.randomUUID()
-    executeSend(content, clientMessageId, attachmentIds)
+    executeSend({ content: c, clientMessageId, attachmentIds: a, replyToId: r })
+    setReplyTo(null)
   }
 
   const handleRetryMessage = (message) => {
     const attachmentIds = message.attachments?.map((a) => a.id) || []
-    executeSend(message.content, message.clientMessageId, attachmentIds)
+    executeSend({
+      content: message.content,
+      clientMessageId: message.clientMessageId,
+      attachmentIds,
+      replyToId: message.replyTo?.id || null,
+    })
+  }
+
+  const handleSaveEdit = async (messageId, newContent) => {
+    try {
+      const updatedDto = await messageApi.edit(messageId, newContent)
+      queryClient.setQueryData(['messages', conversationId], (old = []) =>
+        old.map((m) => (m.id === messageId ? updatedDto : m))
+      )
+      setEditingMessage(null)
+    } catch (err) {
+      console.error('Failed to edit message', err)
+    }
+  }
+
+  const handleDeleteMessage = async (message) => {
+    try {
+      await messageApi.delete(message.id)
+      queryClient.setQueryData(['messages', conversationId], (old = []) =>
+        old.map((m) =>
+          m.id === message.id
+            ? { ...m, deleted: true, content: null, attachments: [] }
+            : m
+        )
+      )
+    } catch (err) {
+      console.error('Failed to delete message', err)
+    }
+  }
+
+  const handleToggleReaction = async (message, emoji) => {
+    try {
+      const updatedDto = await messageApi.react(message.id, emoji)
+      queryClient.setQueryData(['messages', conversationId], (old = []) =>
+        old.map((m) => (m.id === message.id ? updatedDto : m))
+      )
+    } catch (err) {
+      console.error('Failed to toggle reaction', err)
+    }
   }
 
   if (!conversationId) {
@@ -268,17 +333,24 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
           currentUserId={currentUserId}
           onToggleInfo={() => setShowGroupInfo((prev) => !prev)}
           typingText={typingText}
+          onSelectSearchMatch={(msgId) => setHighlightedMessageId(msgId)}
         />
         <MessageList
           messages={mergedMessages}
           currentUserId={currentUserId}
           isGroup={conversation?.type === 'GROUP'}
+          isGroupAdmin={isGroupAdmin}
           unreadCount={conversation?.unreadCount || 0}
           onLoadOlder={loadOlderMessages}
           hasOlder={hasOlder}
           isLoadingOlder={isLoadingOlder}
           onRetryMessage={handleRetryMessage}
           onShowReceipts={setReceiptModalMessage}
+          onReply={(msg) => setReplyTo(msg)}
+          onEdit={(msg) => setEditingMessage(msg)}
+          onDelete={handleDeleteMessage}
+          onToggleReaction={handleToggleReaction}
+          highlightedMessageId={highlightedMessageId}
           onNearBottom={() => {
             if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
               sendRead?.(conversationId)
@@ -290,6 +362,11 @@ export default function ChatWindow({ conversationId, onBack, currentUserId }) {
           onKeyStroke={handleKeyStroke}
           onStopTyping={handleStopTyping}
           disabled={isLoadingConv || Boolean(convError)}
+          replyTo={replyTo}
+          onCancelReply={() => setReplyTo(null)}
+          editingMessage={editingMessage}
+          onCancelEdit={() => setEditingMessage(null)}
+          onSaveEdit={handleSaveEdit}
         />
       </div>
 

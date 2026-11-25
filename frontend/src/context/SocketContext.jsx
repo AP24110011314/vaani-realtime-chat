@@ -6,6 +6,7 @@ import { createSocket } from '../lib/socket'
 import { messageApi } from '../api/messageApi'
 import { presenceApi } from '../api/presenceApi'
 import { receiptApi } from '../api/receiptApi'
+import { showDesktopNotification } from '../lib/notifications'
 import ToastNotification from '../components/common/ToastNotification'
 
 const defaultSocketContextValue = {
@@ -136,6 +137,16 @@ export function SocketProvider({ children }) {
                 content: data.content,
               })
             }
+
+            // Desktop notification (only when tab hidden and chat unmuted)
+            const cachedConvs = queryClient.getQueryData(['conversations']) || []
+            const targetConv = Array.isArray(cachedConvs) ? cachedConvs.find((c) => String(c.id) === convId) : null
+            if (!targetConv?.muted) {
+              showDesktopNotification({
+                title: targetConv?.title || data.sender?.name || 'Vanni',
+                body: `${data.sender?.name ? data.sender.name + ': ' : ''}${data.content || 'Sent an attachment'}`,
+              })
+            }
           }
 
           // 1. Update message list in query cache for this conversation
@@ -193,14 +204,74 @@ export function SocketProvider({ children }) {
               return conv
             })
 
-            // Sort newest first
+            // Sort pinned first, then newest first
             return updatedConvs.sort((a, b) => {
+              if (Boolean(a.pinned) !== Boolean(b.pinned)) {
+                return a.pinned ? -1 : 1
+              }
               const timeA = new Date(a.lastMessageAt || a.updatedAt || a.createdAt).getTime()
               const timeB = new Date(b.lastMessageAt || b.updatedAt || b.createdAt).getTime()
               return timeB - timeA
             })
           })
 
+          break
+        }
+
+        case 'message.updated': {
+          const convId = String(data.conversationId)
+          queryClient.setQueryData(['messages', convId], (old = []) => {
+            if (!Array.isArray(old)) return old
+            return old.map((m) => (m.id === data.id ? { ...m, ...data } : m))
+          })
+
+          queryClient.setQueryData(['conversations'], (oldConvs = []) => {
+            if (!Array.isArray(oldConvs)) return oldConvs
+            return oldConvs.map((conv) => {
+              if (String(conv.id) === convId && conv.lastMessage?.id === data.id) {
+                return {
+                  ...conv,
+                  lastMessage: {
+                    ...conv.lastMessage,
+                    content: data.content,
+                    deleted: data.deleted,
+                  },
+                }
+              }
+              return conv
+            })
+          })
+          break
+        }
+
+        case 'message.deleted': {
+          const convId = String(data.conversationId)
+          const messageId = data.messageId
+          queryClient.setQueryData(['messages', convId], (old = []) => {
+            if (!Array.isArray(old)) return old
+            return old.map((m) =>
+              m.id === messageId
+                ? { ...m, deleted: true, content: null, attachments: [] }
+                : m
+            )
+          })
+
+          queryClient.setQueryData(['conversations'], (oldConvs = []) => {
+            if (!Array.isArray(oldConvs)) return oldConvs
+            return oldConvs.map((conv) => {
+              if (String(conv.id) === convId && conv.lastMessage?.id === messageId) {
+                return {
+                  ...conv,
+                  lastMessage: {
+                    ...conv.lastMessage,
+                    content: null,
+                    deleted: true,
+                  },
+                }
+              }
+              return conv
+            })
+          })
           break
         }
 
@@ -467,7 +538,7 @@ export function SocketProvider({ children }) {
   }, [user, handleEvent, handleReconnectCatchUp])
 
   // Publish /app/chat.send message over STOMP
-  const sendMessage = useCallback(({ conversationId, content, clientMessageId, replyToId }) => {
+  const sendMessage = useCallback(({ conversationId, content, clientMessageId, replyToId, attachmentIds }) => {
     const client = clientRef.current
     if (!client || !client.connected) {
       return false
@@ -481,6 +552,7 @@ export function SocketProvider({ children }) {
           content,
           clientMessageId,
           replyToId,
+          attachmentIds: attachmentIds || null,
         }),
       })
       return true

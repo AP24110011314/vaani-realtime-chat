@@ -13,7 +13,7 @@ public record MessageDto(
     MessageType type,
     ReplySnippet replyTo,
     List<AttachmentDto> attachments,
-    List<?> reactions,
+    List<ReactionDto> reactions,
     String status,
     Instant createdAt,
     Instant editedAt,

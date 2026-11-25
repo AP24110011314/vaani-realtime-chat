@@ -72,4 +72,27 @@ public class UserController {
     public ResponseEntity<UserSummaryResponse> getUser(@PathVariable Long id) {
         return ResponseEntity.ok(userService.getUser(id));
     }
+
+    @PostMapping("/{id}/block")
+    public ResponseEntity<Void> blockUser(
+            @CurrentUser UserPrincipal principal,
+            @PathVariable Long id
+    ) {
+        userService.blockUser(principal.id(), id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{id}/block")
+    public ResponseEntity<Void> unblockUser(
+            @CurrentUser UserPrincipal principal,
+            @PathVariable Long id
+    ) {
+        userService.unblockUser(principal.id(), id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/blocked")
+    public ResponseEntity<List<UserSummaryResponse>> getBlockedUsers(@CurrentUser UserPrincipal principal) {
+        return ResponseEntity.ok(userService.getBlockedUsers(principal.id()));
+    }
 }

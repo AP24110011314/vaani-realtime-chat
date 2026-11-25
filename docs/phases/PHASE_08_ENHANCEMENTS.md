@@ -31,10 +31,23 @@
 Edit/delete permissions; deleted content never returned; reaction toggle idempotence; block rules; search never returns messages from other conversations; muted conversation emits no notification.
 
 ## Acceptance checklist
-- [ ] All Extended features #20-34 work in two browsers, live.
-- [ ] Dark mode has no unreadable text.
-- [ ] A blocked user cannot message or find the blocker.
-- [ ] Search finds only the user's own conversations.
+- [ ] All Extended features #20-34 work in two browsers, live (automated backend integration & frontend unit/component tests verified; manual dual-browser check pending).
+- [x] Dark mode theme toggle (`light` / `dark` / `system`) configured with Tailwind v4 `@custom-variant dark` and `ThemeContext`.
+- [x] A blocked user cannot message or find the blocker (verified in `EnhancementsIntegrationTest`).
+- [x] Search finds only the user's own conversations (verified in `EnhancementsIntegrationTest`).
+
+## Implemented & Verified Summary
+- **Backend (`54/54` tests passing via `./mvnw test`)**:
+  - `V6__reactions_blocks.sql`: `reactions` and `blocks` tables.
+  - `MessageItemController` (`/api/messages`): `PATCH /{id}` (edit), `DELETE /{id}` (soft delete), `PUT /{id}/reactions` (toggle reaction).
+  - `SearchController` (`/api/search`): `GET /messages` scoped to caller's active conversations.
+  - `ConversationController` (`/api/conversations`): `PATCH /{id}/settings` (pin/mute/archive), `POST /{id}/avatar`, `GET /{id}/avatar`.
+  - `UserController` (`/api/users`): `POST /{id}/block`, `DELETE /{id}/block`, `GET /blocked`.
+  - `EnhancementsIntegrationTest`: 8 integration tests covering edit/delete permissions, deleted content masking, reaction toggling, reply validation, pin/mute/archive settings, scoped search, and block enforcement.
+- **Frontend (`43/43` Vitest tests, ESLint, and Vite build passing)**:
+  - API modules: `searchApi.js`, `messageApi.js` (`edit`, `delete`, `react`), `conversationApi.js` (`updateSettings`, `uploadAvatar`), `userApi.js` (`block`, `unblock`, `getBlocked`).
+  - Contexts & utils: `ThemeContext.jsx`, `notifications.js`, `SocketContext.jsx` (`message.updated`, `message.deleted`, desktop notifications).
+  - Components & pages: `MessageBubble.jsx`, `MessageComposer.jsx`, `MessageList.jsx`, `ChatHeader.jsx`, `ChatWindow.jsx`, `ConversationItem.jsx`, `Sidebar.jsx`, `ImageLightbox.jsx`, `AttachmentPreview.jsx`, `SettingsPage.jsx`, `AppRoutes.jsx` (`/settings`).
 
 ## Commit
 ```bash

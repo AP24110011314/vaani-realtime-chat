@@ -1,12 +1,31 @@
-import { useEffect, useRef, useLayoutEffect, useState, useMemo } from 'react'
+import { useEffect, useRef, useLayoutEffect, useState, useMemo, useCallback } from 'react'
 import MessageBubble from './MessageBubble'
 import { formatMessageDateGroup } from '../../lib/formatters'
 import { Loader2, ArrowDown } from 'lucide-react'
+
+// Imperative highlight helpers — avoids setState-in-effect entirely
+const HIGHLIGHT_CLASSES = ['bg-indigo-950/70', 'ring-2', 'ring-indigo-500', 'p-1.5', 'transition-all']
+
+function applyHighlightDOM(id) {
+  if (!id) return
+  const el = document.getElementById(`msg-${id}`)
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    HIGHLIGHT_CLASSES.forEach((cls) => el.classList.add(cls))
+  }
+}
+
+function removeHighlightDOM(id) {
+  if (!id) return
+  const el = document.getElementById(`msg-${id}`)
+  if (el) HIGHLIGHT_CLASSES.forEach((cls) => el.classList.remove(cls))
+}
 
 export default function MessageList({
   messages = [],
   currentUserId,
   isGroup = false,
+  isGroupAdmin = false,
   unreadCount = 0,
   onLoadOlder,
   hasOlder,
@@ -14,12 +33,20 @@ export default function MessageList({
   onRetryMessage,
   onShowReceipts,
   onNearBottom,
+  onReply,
+  onEdit,
+  onDelete,
+  onToggleReaction,
+  highlightedMessageId,
 }) {
   const containerRef = useRef(null)
   const previousScrollHeightRef = useRef(0)
   const isInitialLoadRef = useRef(true)
   const prevMessagesLengthRef = useRef(messages.length)
-  const [showNewMessagesPill, setShowNewMessagesPill] = useState(false)
+  const [showScrollBottomPill, setShowScrollBottomPill] = useState(false)
+  // Ref to track the currently highlighted message for cleanup
+  const currentHighlightRef = useRef(null)
+  const highlightTimerRef = useRef(null)
 
   // Find index of first unread message for the unread divider
   const firstUnreadIndex = useMemo(() => {
@@ -37,7 +64,7 @@ export default function MessageList({
     return -1
   }, [messages, unreadCount, currentUserId])
 
-  // Scroll to bottom on initial load and when sending new message
+  // Scroll to bottom on initial load
   useEffect(() => {
     if (isInitialLoadRef.current && messages.length > 0) {
       if (containerRef.current) {
@@ -58,13 +85,32 @@ export default function MessageList({
     }
   }, [messages])
 
+  // Imperative highlight effect — zero setState calls, purely DOM manipulation
+  useEffect(() => {
+    if (!highlightedMessageId) return
+    // Clear previous highlight
+    clearTimeout(highlightTimerRef.current)
+    removeHighlightDOM(currentHighlightRef.current)
+    currentHighlightRef.current = highlightedMessageId
+    applyHighlightDOM(highlightedMessageId)
+    highlightTimerRef.current = setTimeout(() => {
+      removeHighlightDOM(highlightedMessageId)
+      currentHighlightRef.current = null
+    }, 2500)
+    return () => {
+      clearTimeout(highlightTimerRef.current)
+    }
+  }, [highlightedMessageId])
+
   const handleScroll = () => {
     if (!containerRef.current) return
     const { scrollTop, scrollHeight, clientHeight } = containerRef.current
     const isNearBottom = scrollHeight - scrollTop - clientHeight < 60
+    const isScrolledUp = scrollHeight - scrollTop - clientHeight > 150
+
+    setShowScrollBottomPill(isScrolledUp)
 
     if (isNearBottom) {
-      setShowNewMessagesPill(false)
       onNearBottom?.()
     }
 
@@ -80,10 +126,24 @@ export default function MessageList({
         top: containerRef.current.scrollHeight,
         behavior: 'smooth',
       })
-      setShowNewMessagesPill(false)
+      setShowScrollBottomPill(false)
       onNearBottom?.()
     }
   }
+
+  // jumpToMessage is called from MessageBubble (via onJumpToMessage prop) for quoted reply navigation
+  // Uses imperative DOM manipulation — no setState needed
+  const jumpToMessage = useCallback((targetId) => {
+    if (!targetId) return
+    clearTimeout(highlightTimerRef.current)
+    removeHighlightDOM(currentHighlightRef.current)
+    currentHighlightRef.current = targetId
+    applyHighlightDOM(targetId)
+    highlightTimerRef.current = setTimeout(() => {
+      removeHighlightDOM(targetId)
+      currentHighlightRef.current = null
+    }, 2500)
+  }, [])
 
   // Detect when incoming message arrives while scrolled up
   useEffect(() => {
@@ -96,10 +156,10 @@ export default function MessageList({
 
         if (isNearBottom || isMine) {
           containerRef.current.scrollTop = containerRef.current.scrollHeight
-          setShowNewMessagesPill(false)
+          setShowScrollBottomPill(false)
           onNearBottom?.()
         } else {
-          setShowNewMessagesPill(true)
+          setShowScrollBottomPill(true)
         }
       }
     }
@@ -145,7 +205,11 @@ export default function MessageList({
             message.pending
 
           return (
-            <div key={message.id || message.clientMessageId}>
+            <div
+              key={message.id || message.clientMessageId}
+              id={`msg-${message.id || message.clientMessageId}`}
+              className="rounded-2xl"
+            >
               {showDateDivider && (
                 <div className="flex items-center justify-center my-3">
                   <span className="px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700/60 text-[11px] font-medium text-slate-400 shadow-xs">
@@ -166,16 +230,22 @@ export default function MessageList({
                 message={message}
                 isMine={isMine}
                 isGroup={isGroup}
+                isGroupAdmin={isGroupAdmin}
                 onRetry={onRetryMessage}
                 onShowReceipts={onShowReceipts}
+                onReply={onReply}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onToggleReaction={onToggleReaction}
+                onJumpToMessage={jumpToMessage}
               />
             </div>
           )
         })}
       </div>
 
-      {/* Floating New Messages Pill */}
-      {showNewMessagesPill && (
+      {/* Floating Jump to Latest Button */}
+      {showScrollBottomPill && (
         <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20">
           <button
             type="button"
@@ -183,7 +253,7 @@ export default function MessageList({
             className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-full shadow-lg shadow-black/50 transition-transform active:scale-95 animate-in fade-in"
           >
             <ArrowDown className="w-3.5 h-3.5" />
-            <span>New messages</span>
+            <span>Jump to latest</span>
           </button>
         </div>
       )}

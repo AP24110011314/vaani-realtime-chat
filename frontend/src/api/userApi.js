@@ -31,4 +31,14 @@ export const userApi = {
     const res = await http.delete('/users/me/avatar')
     return res.data
   },
+  block: async (userId) => {
+    await http.post(`/users/${userId}/block`)
+  },
+  unblock: async (userId) => {
+    await http.delete(`/users/${userId}/block`)
+  },
+  getBlocked: async () => {
+    const res = await http.get('/users/blocked')
+    return res.data
+  },
 }

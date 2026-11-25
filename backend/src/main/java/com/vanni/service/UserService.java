@@ -21,14 +21,17 @@ public class UserService {
     private final UserRepository userRepository;
     private final PresenceService presenceService;
     private final ConversationService conversationService;
+    private final com.vanni.repository.BlockRepository blockRepository;
 
     public UserService(
             UserRepository userRepository,
             PresenceService presenceService,
-            @org.springframework.context.annotation.Lazy ConversationService conversationService) {
+            @org.springframework.context.annotation.Lazy ConversationService conversationService,
+            com.vanni.repository.BlockRepository blockRepository) {
         this.userRepository = userRepository;
         this.presenceService = presenceService;
         this.conversationService = conversationService;
+        this.blockRepository = blockRepository;
     }
 
     @Transactional(readOnly = true)
@@ -84,6 +87,36 @@ public class UserService {
 
         return userRepository.searchUsers(currentUserId, searchPattern, pageable).stream()
             .map(this::toUserSummary)
+            .toList();
+    }
+
+    public void blockUser(Long blockerId, Long blockedId) {
+        if (blockerId.equals(blockedId)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_OPERATION", "Cannot block yourself");
+        }
+        User blocker = userRepository.findById(blockerId)
+            .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "User not found"));
+        User blocked = userRepository.findById(blockedId)
+            .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "Target user not found"));
+
+        if (!blockRepository.existsByBlockerIdAndBlockedId(blockerId, blockedId)) {
+            com.vanni.entity.Block block = com.vanni.entity.Block.builder()
+                .blocker(blocker)
+                .blocked(blocked)
+                .build();
+            blockRepository.save(block);
+        }
+    }
+
+    public void unblockUser(Long blockerId, Long blockedId) {
+        blockRepository.findByBlockerIdAndBlockedId(blockerId, blockedId)
+            .ifPresent(blockRepository::delete);
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserSummaryResponse> getBlockedUsers(Long userId) {
+        return blockRepository.findByBlockerIdWithUser(userId).stream()
+            .map(b -> toUserSummary(b.getBlocked()))
             .toList();
     }
 

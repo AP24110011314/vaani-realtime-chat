@@ -23,6 +23,7 @@ public class PresenceService {
     private final UserRepository userRepository;
     private final ConversationMemberRepository conversationMemberRepository;
     private final EventPublisher eventPublisher;
+    private final com.vanni.repository.BlockRepository blockRepository;
 
     private final ConcurrentHashMap<Long, AtomicInteger> sessionCounts = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Long> sessionToUser = new ConcurrentHashMap<>();
@@ -30,10 +31,12 @@ public class PresenceService {
     public PresenceService(
             UserRepository userRepository,
             ConversationMemberRepository conversationMemberRepository,
-            EventPublisher eventPublisher) {
+            EventPublisher eventPublisher,
+            com.vanni.repository.BlockRepository blockRepository) {
         this.userRepository = userRepository;
         this.conversationMemberRepository = conversationMemberRepository;
         this.eventPublisher = eventPublisher;
+        this.blockRepository = blockRepository;
     }
 
     public void onSessionConnected(String sessionId, Long userId) {
@@ -109,7 +112,9 @@ public class PresenceService {
         try {
             Set<Long> mutualUserIds = getMutualMemberUserIds(userId);
             for (Long targetUserId : mutualUserIds) {
-                eventPublisher.sendToUser(targetUserId, "presence.changed", presence);
+                if (!blockRepository.isBlockedEitherWay(userId, targetUserId)) {
+                    eventPublisher.sendToUser(targetUserId, "presence.changed", presence);
+                }
             }
         } catch (Exception ex) {
             log.error("Failed to broadcast presence for user {}: {}", userId, ex.getMessage());

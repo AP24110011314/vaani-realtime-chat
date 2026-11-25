@@ -1,6 +1,7 @@
 package com.vanni.controller;
 
 import com.vanni.dto.request.AddMembersRequest;
+import com.vanni.dto.request.ConversationSettingsRequest;
 import com.vanni.dto.request.CreateDirectConversationRequest;
 import com.vanni.dto.request.CreateGroupRequest;
 import com.vanni.dto.request.SetRoleRequest;
@@ -10,9 +11,11 @@ import com.vanni.security.CurrentUser;
 import com.vanni.security.UserPrincipal;
 import com.vanni.service.ConversationService;
 import jakarta.validation.Valid;
+import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -108,5 +111,30 @@ public class ConversationController {
     ) {
         ConversationDto dto = conversationService.setRole(id, principal.id(), userId, req.role());
         return ResponseEntity.ok(dto);
+    }
+
+    @PatchMapping("/{id}/settings")
+    public ResponseEntity<ConversationDto> updateSettings(
+            @CurrentUser UserPrincipal principal,
+            @PathVariable Long id,
+            @RequestBody ConversationSettingsRequest req
+    ) {
+        ConversationDto dto = conversationService.updateSettings(id, principal.id(), req);
+        return ResponseEntity.ok(dto);
+    }
+
+    @PostMapping("/{id}/avatar")
+    public ResponseEntity<ConversationDto> uploadAvatar(
+            @CurrentUser UserPrincipal principal,
+            @PathVariable Long id,
+            @RequestParam("file") MultipartFile file
+    ) {
+        ConversationDto dto = conversationService.uploadGroupAvatar(id, principal.id(), file);
+        return ResponseEntity.ok(dto);
+    }
+
+    @GetMapping("/{id}/avatar")
+    public ResponseEntity<Resource> getAvatar(@PathVariable Long id) {
+        return conversationService.serveGroupAvatar(id);
     }
 }

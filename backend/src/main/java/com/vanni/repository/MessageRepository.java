@@ -65,4 +65,41 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
           AND m.deletedAt IS NULL
     """)
     long countUnread(@Param("convId") Long convId, @Param("lastReadId") Long lastReadId, @Param("userId") Long userId);
+
+    @Query("""
+        SELECT m FROM Message m
+        WHERE m.conversation.id = :convId
+          AND m.deletedAt IS NULL
+          AND LOWER(m.content) LIKE :pattern
+          AND EXISTS (
+              SELECT 1 FROM ConversationMember cm
+              WHERE cm.conversation.id = :convId
+                AND cm.user.id = :userId
+                AND cm.leftAt IS NULL
+          )
+        ORDER BY m.createdAt DESC
+    """)
+    List<Message> searchInConversation(
+        @Param("convId") Long convId,
+        @Param("userId") Long userId,
+        @Param("pattern") String pattern,
+        Pageable pageable
+    );
+
+    @Query("""
+        SELECT m FROM Message m
+        WHERE m.deletedAt IS NULL
+          AND LOWER(m.content) LIKE :pattern
+          AND m.conversation.id IN (
+              SELECT cm.conversation.id FROM ConversationMember cm
+              WHERE cm.user.id = :userId
+                AND cm.leftAt IS NULL
+          )
+        ORDER BY m.createdAt DESC
+    """)
+    List<Message> searchAcrossConversations(
+        @Param("userId") Long userId,
+        @Param("pattern") String pattern,
+        Pageable pageable
+    );
 }

@@ -4,6 +4,7 @@ import LoginPage from '../pages/LoginPage'
 import RegisterPage from '../pages/RegisterPage'
 import AppShell from '../pages/AppShell'
 import ProfilePage from '../pages/ProfilePage'
+import SettingsPage from '../pages/SettingsPage'
 import NotFoundPage from '../pages/NotFoundPage'
 import ProtectedRoute from './ProtectedRoute'
 import PublicOnlyRoute from './PublicOnlyRoute'
@@ -25,6 +26,7 @@ export default function AppRoutes() {
         <Route path="/app" element={<AppShell />} />
         <Route path="/app/c/:conversationId" element={<AppShell />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/settings" element={<SettingsPage />} />
       </Route>
 
       {/* 404 Fallback */}

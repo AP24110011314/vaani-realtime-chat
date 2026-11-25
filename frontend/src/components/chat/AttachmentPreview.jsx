@@ -4,9 +4,13 @@ import { formatFileSize } from '../../lib/formatters'
 import ImageLightbox from './ImageLightbox'
 
 export default function AttachmentPreview({ attachments = [], isMine = false }) {
-  const [activeLightboxImage, setActiveLightboxImage] = useState(null)
+  const [activeImageIndex, setActiveImageIndex] = useState(null)
 
   if (!attachments || attachments.length === 0) return null
+
+  const imageAttachments = attachments
+    .filter((a) => a.mimeType && a.mimeType.startsWith('image/'))
+    .map((a) => ({ src: a.url, alt: a.fileName }))
 
   const getFileIcon = (mimeType = '') => {
     if (mimeType.includes('pdf')) return <FileText className="w-5 h-5 text-rose-400 flex-shrink-0" />
@@ -23,11 +27,12 @@ export default function AttachmentPreview({ attachments = [], isMine = false }) 
           const isImage = att.mimeType && att.mimeType.startsWith('image/')
 
           if (isImage) {
+            const imgIdx = imageAttachments.findIndex((img) => img.src === att.url)
             return (
               <div key={att.id || att.url} className="relative group/att overflow-hidden rounded-xl">
                 <button
                   type="button"
-                  onClick={() => setActiveLightboxImage({ src: att.url, alt: att.fileName })}
+                  onClick={() => setActiveImageIndex(imgIdx >= 0 ? imgIdx : 0)}
                   className="block cursor-pointer focus:outline-hidden"
                 >
                   <img
@@ -79,11 +84,13 @@ export default function AttachmentPreview({ attachments = [], isMine = false }) 
         })}
       </div>
 
-      {activeLightboxImage && (
+      {activeImageIndex !== null && imageAttachments.length > 0 && (
         <ImageLightbox
-          src={activeLightboxImage.src}
-          alt={activeLightboxImage.alt}
-          onClose={() => setActiveLightboxImage(null)}
+          images={imageAttachments}
+          currentIndex={activeImageIndex}
+          onPrev={() => setActiveImageIndex((prev) => Math.max(0, prev - 1))}
+          onNext={() => setActiveImageIndex((prev) => Math.min(imageAttachments.length - 1, prev + 1))}
+          onClose={() => setActiveImageIndex(null)}
         />
       )}
     </>

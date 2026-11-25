@@ -27,8 +27,31 @@ export default function AppShell() {
     },
   })
 
+  // Update conversation settings mutation
+  const updateSettingsMutation = useMutation({
+    mutationFn: ({ id, settings }) => conversationApi.updateSettings(id, settings),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['conversations'], (old = []) => {
+        if (!Array.isArray(old)) return old
+        if (updated.archived) {
+          return old.filter((c) => c.id !== updated.id)
+        }
+        return old.map((c) => (c.id === updated.id ? { ...c, ...updated } : c))
+      })
+      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      queryClient.invalidateQueries({ queryKey: ['conversations', 'archived'] })
+      queryClient.setQueryData(['conversation', String(updated.id)], (old) =>
+        old ? { ...old, ...updated } : updated
+      )
+    },
+  })
+
   const handleStartDirectChat = async (targetUser) => {
     return startDirectMutation.mutateAsync(targetUser.id)
+  }
+
+  const handleUpdateSettings = async (id, settings) => {
+    return updateSettingsMutation.mutateAsync({ id, settings })
   }
 
   const handleSelectConversation = (id) => {
@@ -54,6 +77,7 @@ export default function AppShell() {
             activeId={conversationId}
             onSelectConversation={handleSelectConversation}
             onStartDirectChat={handleStartDirectChat}
+            onUpdateSettings={handleUpdateSettings}
             isLoading={isLoading}
           />
         </div>

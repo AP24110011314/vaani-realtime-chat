@@ -20,6 +20,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
         WHERE u.id != :currentUserId
           AND u.enabled = true
           AND (LOWER(u.name) LIKE :pattern OR LOWER(u.email) LIKE :pattern)
+          AND u.id NOT IN (SELECT b.blocked.id FROM Block b WHERE b.blocker.id = :currentUserId)
+          AND u.id NOT IN (SELECT b.blocker.id FROM Block b WHERE b.blocked.id = :currentUserId)
         ORDER BY u.name ASC
     """)
     List<User> searchUsers(@Param("currentUserId") Long currentUserId, @Param("pattern") String pattern, Pageable pageable);

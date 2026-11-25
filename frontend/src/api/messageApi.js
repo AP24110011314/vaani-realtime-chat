@@ -19,4 +19,15 @@ export const messageApi = {
     })
     return res.data
   },
+  edit: async (id, content) => {
+    const res = await http.patch(`/messages/${id}`, { content })
+    return res.data
+  },
+  delete: async (id) => {
+    await http.delete(`/messages/${id}`)
+  },
+  react: async (id, emoji) => {
+    const res = await http.put(`/messages/${id}/reactions`, { emoji })
+    return res.data
+  },
 }

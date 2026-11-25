@@ -46,4 +46,16 @@ export const conversationApi = {
     })
     return res.data
   },
+  updateSettings: async (id, settings) => {
+    const res = await http.patch(`/conversations/${id}/settings`, settings)
+    return res.data
+  },
+  uploadAvatar: async (id, file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await http.post(`/conversations/${id}/avatar`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return res.data
+  },
 }
