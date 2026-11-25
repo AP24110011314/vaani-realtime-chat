@@ -17,3 +17,6 @@ test-results/
 .vscode/
 *.iml
 .DS_Store
+# docs
+docs/
+docs2/
