@@ -3,3 +3,8 @@ logging:
     com.vanni: DEBUG
     org.springframework.security: INFO
     org.flywaydb: INFO
+
+app:
+  ai:
+    features-enabled: ${AI_FEATURES_ENABLED:true}
+    provider: ${AI_PROVIDER:fake}
