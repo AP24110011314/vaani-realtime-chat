@@ -73,7 +73,7 @@ public class GeminiAiSummaryService implements AiSummaryService {
 
         String modelName = (props.getGeminiModel() != null && !props.getGeminiModel().isBlank())
             ? props.getGeminiModel().trim()
-            : "gemini-flash-latest";
+            : "gemini-flash-lite-latest";
         String baseUrl = (props.getGeminiBaseUrl() != null && !props.getGeminiBaseUrl().isBlank())
             ? props.getGeminiBaseUrl().replaceAll("/+$", "")
             : "https://generativelanguage.googleapis.com";

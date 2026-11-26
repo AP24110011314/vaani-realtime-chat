@@ -17,7 +17,7 @@ public class AiProperties {
     private String apiKey = "";
     private String model = "claude-haiku-4-5";
     private String geminiApiKey = "";
-    private String geminiModel = "gemini-flash-latest";
+    private String geminiModel = "gemini-flash-lite-latest";
     private String geminiBaseUrl = "https://generativelanguage.googleapis.com";
     private int maxInputChars = 60000;
     private int timeoutSeconds = 30;
