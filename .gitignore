@@ -2,21 +2,29 @@
 .env
 .env.*
 !.env.example
+
 # backend
 backend/target/
-backend/uploads/
+uploads/
 *.log
-# frontend
+
+# frontend & tests
 frontend/node_modules/
 frontend/dist/
 frontend/coverage/
 playwright-report/
+**/playwright-report/
 test-results/
+**/test-results/
+.playwright-mcp/
+
 # IDE / OS
 .idea/
 .vscode/
 *.iml
 .DS_Store
-# docs
+
+# local docs & assistant notes (kept locally, excluded from GitHub)
 docs/
 docs2/
+CLAUDE.md

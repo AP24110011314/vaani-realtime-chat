@@ -4,11 +4,14 @@
 
 **A real-time web chat platform crafted with frosted-glass aesthetics, hardened security, AI conversation recaps, and sub-second STOMP messaging & WebRTC calls.**
 
+[![Live App](https://img.shields.io/badge/Live_Demo-AWS_EC2_Sydney-0F766E?style=flat-square&logo=amazonaws&logoColor=white)](https://vanni.16-178-100-144.sslip.io)
 [![Java](https://img.shields.io/badge/Java-21_LTS-0F766E?style=flat-square&logo=openjdk&logoColor=white)](backend/pom.xml)
 [![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1.3-0E7490?style=flat-square&logo=springboot&logoColor=white)](backend/pom.xml)
 [![React](https://img.shields.io/badge/React-19-0F766E?style=flat-square&logo=react&logoColor=white)](frontend/package.json)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-0E7490?style=flat-square&logo=tailwindcss&logoColor=white)](frontend/package.json)
 [![MySQL](https://img.shields.io/badge/MySQL-8.4-0F766E?style=flat-square&logo=mysql&logoColor=white)](docker-compose.yml)
+
+**Live Application:** [https://vanni.16-178-100-144.sslip.io](https://vanni.16-178-100-144.sslip.io) *(Hosted on AWS EC2 `ap-southeast-2` with HTTPS via Caddy)*
 
 <br />
 
@@ -20,9 +23,11 @@
 
 ## Overview
 
-**Vanni** runs directly in any modern desktop or mobile browser with zero installation. Users can register, search contacts, chat one-to-one or in groups with `@mentions`, share voice notes, files, and rich link previews, schedule future messages, join groups via invite links or QR codes, catch up on missed conversations with server-side AI summaries, and hop onto 1:1 WebRTC voice or video calls.
+**Vanni** runs directly in any modern desktop or mobile browser with zero installation. Users can register, search contacts, chat one-to-one or in groups with `@mentions`, share voice notes, files, and rich link previews, schedule future messages, join groups via invite links or QR codes, catch up on missed conversations with server-side AI summaries, and hop onto 1:1 or group WebRTC voice and video calls.
 
 Built around the **Vanni Glass** design system, the interface pairs **Pearl** (warm cream mesh light mode) and **Onyx** (true-black dark mode) with translucent frosted panels, crisp teal-sky accents, and a **Fraunces** wordmark.
+
+> **Live Deployment (AWS EC2):** Try it online at [https://vanni.16-178-100-144.sslip.io](https://vanni.16-178-100-144.sslip.io) (deployed on AWS EC2 `ap-southeast-2` via Docker Compose, Nginx, Caddy HTTPS, MySQL 8.4, and `coturn` TURN relay).
 
 ---
 
@@ -77,7 +82,7 @@ Built around the **Vanni Glass** design system, the interface pairs **Pearl** (w
 | **Authentication & Security** | HttpOnly JWT cookie (`vanni_at`), SHA-256 hashed rotating refresh tokens (`vanni_rt`) with reuse-family revocation, SPA CSRF (`X-XSRF-TOKEN`), strict WebSocket `Origin` validation, Bucket4j rate limiting with `Retry-After`, CSP/HSTS/Permissions-Policy headers, and `X-Request-Id` MDC logging. |
 | **Real-Time Messaging & Groups** | STOMP over WebSocket (`/ws`), idempotent `clientMessageId` delivery, cursor pagination, live typing & presence, `@mentions` with `@all` admin rate-limits and `@` badge filtering, plus SHA-256 hashed invite links with expiration, usage caps, admin approval, and QR codes. |
 | **Voice, Previews & Scheduling** | Browser `MediaRecorder` voice notes with 64-bar waveform playback and HTTP `Range` streaming; SSRF-hardened OpenGraph link previews via `SafeHttpFetcher` and local image proxying; UTC-stored scheduled messages claimed once via `FOR UPDATE SKIP LOCKED`. |
-| **AI "Catch me up" & Calls** | Per-user opt-in unread conversation summaries powered server-side by Gemini (`gemini-flash-lite-latest`) or Anthropic with prompt-injection boundaries and zero stored transcripts; 1:1 WebRTC audio/video calls over STOMP signaling with ICE quality indicators and relay-only privacy mode. |
+| **AI "Catch me up" & Calls** | Per-user opt-in unread conversation summaries powered server-side by Gemini (`gemini-flash-lite-latest`) or Anthropic with prompt-injection boundaries and zero stored transcripts; 1:1 & group mesh WebRTC audio/video calls over STOMP signaling with ICE quality indicators and relay-only privacy mode. |
 | **Receipts, Media & Themes** | Monotonic `SENT` → `DELIVERED` → `READ` receipts, Apache Tika MIME sniffing, EXIF stripping, pluggable attachment storage (`local`, `cloudinary`, `s3`), Pearl (`Light`) / Onyx (`Dark`) / System themes, and 390px mobile responsiveness. |
 
 ---
@@ -137,15 +142,17 @@ cd frontend && npm install && npm run dev -- --port 5173
 
 Open [http://localhost:5173](http://localhost:5173). *(Avoid ports `5000` and `7000` on macOS, which are reserved by AirPlay Receiver.)*
 
-### Self-Hosted Production (Docker Compose)
+### Live & Self-Hosted Production (AWS EC2 / Docker Compose)
+
+- **Live Instance:** [https://vanni.16-178-100-144.sslip.io](https://vanni.16-178-100-144.sslip.io) (AWS EC2 `ap-southeast-2`, Nginx + Caddy HTTPS reverse proxy + `coturn` TURN relay)
 
 ```bash
 cp .env.example .env
-# Configure DB_ROOT_PASSWORD, DB_PASSWORD, JWT_SECRET (64+ chars), ALLOWED_ORIGINS, and optional AI / TURN secrets
+# Configure DB_ROOT_PASSWORD, DB_PASSWORD, JWT_SECRET (64+ chars), ALLOWED_ORIGINS, FRONTEND_URL, and optional AI / TURN secrets
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-Nginx exposes the app on `${APP_PORT:-8088}` and proxies `/api` and `/ws` internally to the non-root `backend:8080` service.
+Nginx exposes the app on `${APP_PORT:-8088}` and proxies `/api` and `/ws` internally to the non-root `backend:8080` service. Put Caddy or Nginx + Let's Encrypt in front of `${APP_PORT:-8088}` for HTTPS (`COOKIE_SECURE=true`, microphone/camera access) and run `coturn` for cross-network WebRTC calls.
 
 ---
 
@@ -173,9 +180,9 @@ See [`.env.example`](.env.example) for the complete reference:
 ## Testing & Quality
 
 ```bash
-# Backend unit, integration (Testcontainers MySQL), security & WebSocket tests + JaCoCo
+# Backend unit, integration (isolated vanni_test MySQL), security & WebSocket tests + JaCoCo
 cd backend && ./mvnw -q verify
 
-# Frontend lint, unit/MSW tests, production build & Playwright E2E
+# Frontend lint, unit/MSW tests, production build & Playwright E2E (uses vanni_test)
 cd frontend && npm run lint && npm test -- --run && npm run build && npx playwright test
 ```
