@@ -111,6 +111,16 @@ export class WebRtcPeer {
         onConnectionStateChange?.(this.pc.connectionState)
       }
     }
+
+    this.pc.oniceconnectionstatechange = () => {
+      if (this.closed) return
+      const iceState = this.pc.iceConnectionState
+      if ((iceState === 'connected' || iceState === 'completed') && this.pc.connectionState !== 'connected') {
+        onConnectionStateChange?.('connected')
+      } else if (iceState === 'failed' && this.pc.connectionState !== 'failed') {
+        onConnectionStateChange?.('failed')
+      }
+    }
   }
 
   addLocalStream(stream) {
@@ -189,6 +199,7 @@ export class WebRtcPeer {
     this.pc.onicecandidate = null
     this.pc.ontrack = null
     this.pc.onconnectionstatechange = null
+    this.pc.oniceconnectionstatechange = null
     try {
       this.pc.close()
     } catch {
