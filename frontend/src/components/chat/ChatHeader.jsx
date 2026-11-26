@@ -252,16 +252,24 @@ export default function ChatHeader({
 
           {/* Glass Action Button Group */}
           <div className="glass-subtle rounded-2xl p-1 flex items-center gap-0.5">
-            {!isGroup && peer?.id && !isPeerBlocked && (
+            {(isGroup ? Boolean(conversation?.id && (conversation?.members?.length || 0) >= 2) : Boolean(peer?.id && !isPeerBlocked)) && (
               <>
                 <button
                   type="button"
                   disabled={callState !== 'idle'}
                   onClick={() =>
-                    startCall({ conversationId: conversation.id, peer, type: 'AUDIO' })
+                    startCall({
+                      conversationId: conversation.id,
+                      peer: isGroup
+                        ? { id: conversation.id, name: conversation.title, avatarUrl: conversation.avatarUrl }
+                        : peer,
+                      type: 'AUDIO',
+                      isGroup,
+                      groupTitle: isGroup ? conversation.title : null,
+                    })
                   }
                   className="p-1.5 text-ink-muted hover:text-accent-text hover:bg-[var(--glass-bg-hover)] rounded-xl transition-all active:scale-95 focus-accent cursor-pointer disabled:opacity-40"
-                  title="Voice call"
+                  title={isGroup ? 'Group voice call' : 'Voice call'}
                   aria-label="Voice call"
                 >
                   <Phone className="w-4 h-4" />
@@ -270,10 +278,18 @@ export default function ChatHeader({
                   type="button"
                   disabled={callState !== 'idle'}
                   onClick={() =>
-                    startCall({ conversationId: conversation.id, peer, type: 'VIDEO' })
+                    startCall({
+                      conversationId: conversation.id,
+                      peer: isGroup
+                        ? { id: conversation.id, name: conversation.title, avatarUrl: conversation.avatarUrl }
+                        : peer,
+                      type: 'VIDEO',
+                      isGroup,
+                      groupTitle: isGroup ? conversation.title : null,
+                    })
                   }
                   className="p-1.5 text-ink-muted hover:text-accent-text hover:bg-[var(--glass-bg-hover)] rounded-xl transition-all active:scale-95 focus-accent cursor-pointer disabled:opacity-40"
-                  title="Video call"
+                  title={isGroup ? 'Group video call' : 'Video call'}
                   aria-label="Video call"
                 >
                   <Video className="w-4 h-4" />

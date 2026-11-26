@@ -418,9 +418,10 @@ export default function MessageComposer({
     }
   }
 
-  const handleConfirmSchedule = async (scheduledForIso) => {
+  const handleConfirmSchedule = async (scheduledForIso, modalMessage) => {
     if (!onScheduleMessage) return
-    const trimmed = content.trim()
+    const rawText = typeof modalMessage === 'string' ? modalMessage : content
+    const trimmed = rawText.trim()
     const wireContent = isGroup
       ? encodeMentionsForWire(trimmed, selectedMentionsMap, isGroupAdmin)
       : trimmed
@@ -825,37 +826,38 @@ export default function MessageComposer({
           </span>
         )}
 
-        {/* Mic Button (when empty & supported) or Schedule + Circular Gradient Send Button */}
-        {showMicButton ? (
-          <button
-            type="button"
-            onClick={() => {
-              setComposerError(null)
-              setIsRecordingVoice(true)
-            }}
-            disabled={disabled}
-            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 btn-accent transition-all duration-150 focus-accent cursor-pointer disabled:opacity-45"
-            aria-label="Record voice message"
-            title="Record voice message"
-          >
-            <Mic className="w-4 h-4" />
-          </button>
-        ) : (
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            {!editingMessage && onScheduleMessage && canSend && (
-              <button
-                type="button"
-                onClick={() => {
-                  setScheduleError(null)
-                  setShowScheduleModal(true)
-                }}
-                className="w-9 h-9 rounded-full flex items-center justify-center glass-subtle hover:bg-[var(--glass-bg-hover)] text-ink-muted hover:text-accent-text transition-all focus-accent cursor-pointer"
-                aria-label="Schedule message"
-                title="Schedule message for later"
-              >
-                <Clock className="w-4 h-4" />
-              </button>
-            )}
+        {/* Schedule Button + Mic (when empty & supported) or Circular Gradient Send Button */}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {!editingMessage && onScheduleMessage && (
+            <button
+              type="button"
+              onClick={() => {
+                setScheduleError(null)
+                setShowScheduleModal(true)
+              }}
+              disabled={disabled || isUploadingAny}
+              className="w-9 h-9 rounded-full flex items-center justify-center glass-subtle hover:bg-[var(--glass-bg-hover)] text-ink-muted hover:text-accent-text disabled:opacity-40 transition-all focus-accent cursor-pointer"
+              aria-label="Schedule message"
+              title="Schedule message for later"
+            >
+              <Clock className="w-4 h-4" />
+            </button>
+          )}
+          {showMicButton ? (
+            <button
+              type="button"
+              onClick={() => {
+                setComposerError(null)
+                setIsRecordingVoice(true)
+              }}
+              disabled={disabled}
+              className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 btn-accent transition-all duration-150 focus-accent cursor-pointer disabled:opacity-45"
+              aria-label="Record voice message"
+              title="Record voice message"
+            >
+              <Mic className="w-4 h-4" />
+            </button>
+          ) : (
             <span
               className="flex-shrink-0"
               title={
@@ -881,21 +883,24 @@ export default function MessageComposer({
                 <SendHorizonal className="w-4 h-4" />
               </button>
             </span>
-          </div>
-        )}
+          )}
+        </div>
       </div>
       )}
 
-      <ScheduleModal
-        isOpen={showScheduleModal}
-        onClose={() => setShowScheduleModal(false)}
-        onConfirm={handleConfirmSchedule}
-        previewText={content.trim()}
-        attachmentCount={attachments.filter((a) => a.dto).length}
-        minLeadSeconds={5}
-        isSubmitting={isScheduling}
-        error={scheduleError}
-      />
+      {showScheduleModal && (
+        <ScheduleModal
+          isOpen={showScheduleModal}
+          onClose={() => setShowScheduleModal(false)}
+          onConfirm={handleConfirmSchedule}
+          previewText={content.trim()}
+          allowMessageInput={content.trim().length === 0}
+          attachmentCount={attachments.filter((a) => a.dto).length}
+          minLeadSeconds={5}
+          isSubmitting={isScheduling}
+          error={scheduleError}
+        />
+      )}
     </div>
   )
 }

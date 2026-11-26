@@ -40,7 +40,7 @@ import ScheduledPage from './pages/ScheduledPage'
 import CatchUpPanel from './components/chat/CatchUpPanel'
 import { aiApi } from './api/aiApi'
 import { callApi } from './api/callApi'
-import { CallProvider } from './context/CallContext'
+import { CallContext, CallProvider } from './context/CallContext'
 import IncomingCallOverlay from './components/call/IncomingCallOverlay'
 import CallScreen from './components/call/CallScreen'
 import { WebRtcPeer, formatCallDuration } from './lib/webrtc'
@@ -1878,6 +1878,36 @@ describe('Phase 5 Groups, Presence & System Messages', () => {
       })
     })
 
+    it('shows schedule button even when composer is empty and lets user compose inside modal', async () => {
+      const onSchedule = vi.fn().mockResolvedValueOnce({ id: 92 })
+      render(
+        <MessageComposer
+          onSendMessage={vi.fn()}
+          onScheduleMessage={onSchedule}
+          disabled={false}
+          conversationId={7}
+        />
+      )
+
+      const scheduleBtn = screen.getByRole('button', { name: 'Schedule message' })
+      expect(scheduleBtn).toBeInTheDocument()
+      fireEvent.click(scheduleBtn)
+
+      const modalMsg = screen.getByLabelText('Message')
+      fireEvent.change(modalMsg, { target: { value: 'Morning check-in' } })
+      fireEvent.click(screen.getByRole('button', { name: /Tomorrow 9:00 AM/i }))
+      fireEvent.click(screen.getByRole('dialog').querySelector('button[type="submit"]'))
+
+      await waitFor(() => {
+        expect(onSchedule).toHaveBeenCalledWith(
+          expect.objectContaining({
+            content: 'Morning check-in',
+            scheduledFor: expect.any(String),
+          })
+        )
+      })
+    })
+
     it('renders ScheduledPage and triggers sendNow, edit, and cancel actions', async () => {
       const futureIso = new Date(Date.now() + 2 * 3600_000).toISOString()
       const listSpy = vi.spyOn(scheduledApi, 'list').mockResolvedValue([
@@ -2128,6 +2158,134 @@ describe('Phase 5 Groups, Presence & System Messages', () => {
 
       blockedSpy.mockRestore()
       updateMeSpy.mockRestore()
+    })
+
+    it('renders group call buttons in ChatHeader, incoming group ring UI, and multi-participant CallScreen grid', () => {
+      const startCallSpy = vi.fn()
+      const groupConv = {
+        id: 42,
+        type: 'GROUP',
+        title: 'Engineering Guild',
+        members: [
+          { id: 1, name: 'Asha' },
+          { id: 2, name: 'Ravi' },
+          { id: 3, name: 'Meera' },
+        ],
+      }
+
+      render(
+        <CallContext.Provider
+          value={{
+            callState: 'idle',
+            callType: 'AUDIO',
+            isGroupCall: false,
+            callTitle: null,
+            peer: null,
+            mediaError: null,
+            endNotice: null,
+            localStream: null,
+            remoteStream: null,
+            remotePeers: [],
+            startCall: startCallSpy,
+            acceptIncomingCall: vi.fn(),
+            declineIncomingCall: vi.fn(),
+            endCall: vi.fn(),
+            toggleMute: vi.fn(),
+            toggleCamera: vi.fn(),
+            flipCamera: vi.fn(),
+            clearMediaError: vi.fn(),
+            clearEndNotice: vi.fn(),
+          }}
+        >
+          <ChatHeader
+            conversation={groupConv}
+            currentUserId={1}
+            isTyping={false}
+            onlineUsers={{}}
+            onOpenSearch={vi.fn()}
+            onOpenGroupInfo={vi.fn()}
+            onBack={vi.fn()}
+          />
+        </CallContext.Provider>
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Video call' }))
+      expect(startCallSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conversationId: 42,
+          type: 'VIDEO',
+          isGroup: true,
+          groupTitle: 'Engineering Guild',
+        })
+      )
+
+      render(
+        <CallContext.Provider
+          value={{
+            callState: 'incoming',
+            callType: 'VIDEO',
+            isGroupCall: true,
+            callTitle: 'Engineering Guild',
+            peer: { id: 2, name: 'Ravi' },
+            mediaError: null,
+            endNotice: null,
+            localStream: null,
+            remoteStream: null,
+            remotePeers: [],
+            startCall: vi.fn(),
+            acceptIncomingCall: vi.fn(),
+            declineIncomingCall: vi.fn(),
+            endCall: vi.fn(),
+            toggleMute: vi.fn(),
+            toggleCamera: vi.fn(),
+            flipCamera: vi.fn(),
+            clearMediaError: vi.fn(),
+            clearEndNotice: vi.fn(),
+          }}
+        >
+          <IncomingCallOverlay />
+        </CallContext.Provider>
+      )
+      expect(screen.getByText(/Incoming group video call/i)).toBeInTheDocument()
+      expect(screen.getByText('Started by Ravi')).toBeInTheDocument()
+
+      render(
+        <CallContext.Provider
+          value={{
+            callState: 'connected',
+            callType: 'VIDEO',
+            isGroupCall: true,
+            callTitle: 'Engineering Guild',
+            peer: { id: 2, name: 'Ravi' },
+            isMuted: false,
+            isCameraOff: false,
+            quality: 'good',
+            durationSec: 12,
+            connectionState: 'connected',
+            mediaError: null,
+            endNotice: null,
+            localStream: null,
+            remoteStream: null,
+            remotePeers: [
+              { user: { id: 2, name: 'Ravi' }, stream: null, connectionState: 'connected', quality: 'good' },
+              { user: { id: 3, name: 'Meera' }, stream: null, connectionState: 'connected', quality: 'good' },
+            ],
+            startCall: vi.fn(),
+            acceptIncomingCall: vi.fn(),
+            declineIncomingCall: vi.fn(),
+            endCall: vi.fn(),
+            toggleMute: vi.fn(),
+            toggleCamera: vi.fn(),
+            flipCamera: vi.fn(),
+            clearMediaError: vi.fn(),
+            clearEndNotice: vi.fn(),
+          }}
+        >
+          <CallScreen />
+        </CallContext.Provider>
+      )
+      expect(screen.getByTestId('group-peer-tile-2')).toBeInTheDocument()
+      expect(screen.getByTestId('group-peer-tile-3')).toBeInTheDocument()
     })
   })
 })

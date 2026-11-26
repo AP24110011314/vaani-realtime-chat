@@ -132,8 +132,9 @@ public class CallWebSocketController {
             Map<String, Object> map = objectMapper.readValue(rawJson, new TypeReference<>() {});
             String callId = asString(map.get("callId"));
             String kind = asString(map.get("kind"));
+            Long targetUserId = toLong(map.get("targetUserId"));
             Object signalPayload = map.get("payload");
-            callService.relaySignal(userId, callId, kind, rawJson, signalPayload);
+            callService.relaySignal(userId, callId, kind, rawJson, signalPayload, targetUserId);
         } catch (ApiException ex) {
             sendCallError(userId, null, ex.getCode(), ex.getMessage());
         } catch (Exception ex) {

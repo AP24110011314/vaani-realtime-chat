@@ -6,6 +6,8 @@ export default function IncomingCallOverlay() {
   const {
     callState,
     callType,
+    isGroupCall,
+    callTitle,
     peer,
     mediaError,
     acceptIncomingCall,
@@ -39,6 +41,8 @@ export default function IncomingCallOverlay() {
                   const target = {
                     conversationId: mediaError.conversationId,
                     peer: mediaError.peer,
+                    isGroup: mediaError.isGroup,
+                    groupTitle: mediaError.groupTitle,
                     type: 'AUDIO',
                   }
                   clearMediaError()
@@ -87,9 +91,12 @@ export default function IncomingCallOverlay() {
         <div className="space-y-1">
           <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full accent-badge text-[11px] font-semibold">
             {isVideo ? <Video className="w-3 h-3" /> : <Phone className="w-3 h-3" />}
-            <span>Incoming {isVideo ? 'video' : 'voice'} call</span>
+            <span>Incoming {isGroupCall ? 'group ' : ''}{isVideo ? 'video' : 'voice'} call</span>
           </div>
-          <h2 className="text-xl font-bold text-ink">{peer?.name || 'Contact'}</h2>
+          <h2 className="text-xl font-bold text-ink">{isGroupCall ? (callTitle || 'Group call') : (peer?.name || 'Contact')}</h2>
+          {isGroupCall && peer?.name && (
+            <p className="text-xs text-ink-muted">Started by {peer.name}</p>
+          )}
         </div>
 
         {mediaError && (

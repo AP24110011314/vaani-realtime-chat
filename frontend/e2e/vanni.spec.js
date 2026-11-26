@@ -402,7 +402,40 @@ test.describe('Vanni Phase 9 E2E (Two Browsers, Realtime, Groups, Security, Mobi
     await expect(callDialogA).toBeHidden({ timeout: 5000 })
     await expect(pageA.getByRole('log').getByText('Declined voice call')).toBeVisible({ timeout: 10000 })
 
-    // Switch back to group chat for mobile & reload assertions
+    // 6b. 3-way Group Video Call in InviteClub (all 3 users are members): A starts group call -> B & C accept -> all reach connected mesh -> A leaves cleanly while B & C stay connected
+    await pageA.getByRole('button', { name: new RegExp(`InviteClub ${ts}`) }).first().click()
+    await pageB.getByRole('button', { name: new RegExp(`InviteClub ${ts}`) }).first().click()
+    await pageC.getByRole('button', { name: new RegExp(`InviteClub ${ts}`) }).first().click()
+    await expect(pageA.getByRole('button', { name: 'Video call' })).toBeVisible({ timeout: 5000 })
+    await pageA.getByRole('button', { name: 'Video call' }).click()
+    await expect(callDialogA).toBeVisible({ timeout: 5000 })
+
+    const incomingDialogC = pageC.getByRole('dialog', { name: 'Incoming call' })
+    await expect(incomingDialogB).toBeVisible({ timeout: 10000 })
+    await expect(incomingDialogC).toBeVisible({ timeout: 10000 })
+    await expect(incomingDialogB.getByText(/Incoming group video call/i)).toBeVisible()
+
+    await incomingDialogB.getByRole('button', { name: 'Accept call' }).click()
+    await incomingDialogC.getByRole('button', { name: 'Accept call' }).click()
+
+    const callDialogC = pageC.getByRole('dialog', { name: 'Active call' })
+    await expect(callDialogA).toHaveAttribute('data-connection-state', 'connected', { timeout: 15000 })
+    await expect(callDialogB).toHaveAttribute('data-connection-state', 'connected', { timeout: 15000 })
+    await expect(callDialogC).toHaveAttribute('data-connection-state', 'connected', { timeout: 15000 })
+    await expect(callDialogA.locator('[data-testid^="group-peer-tile-"]')).toHaveCount(2, { timeout: 10000 })
+
+    // A leaves early -> B & C remain connected in the group call
+    await callDialogA.getByRole('button', { name: 'End call' }).click()
+    await expect(callDialogA).toBeHidden({ timeout: 5000 })
+    await expect(callDialogB).toBeVisible()
+    await expect(callDialogC).toBeVisible()
+
+    // B ends -> <2 remain, closes C too
+    await callDialogB.getByRole('button', { name: 'End call' }).click()
+    await expect(callDialogB).toBeHidden({ timeout: 5000 })
+    await expect(callDialogC).toBeHidden({ timeout: 5000 })
+
+    // Switch back to E2E Squad for mobile & reload assertions
     await pageA.getByRole('button', { name: new RegExp(`E2E Squad ${ts}`) }).first().click()
     await pageB.getByRole('button', { name: new RegExp(`E2E Squad ${ts}`) }).first().click()
 

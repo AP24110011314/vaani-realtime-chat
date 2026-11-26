@@ -32,7 +32,11 @@ CONNECTED --ICE disconnected--> RECONNECTING --restart ok--> CONNECTED
 ```
 End reasons: `COMPLETED, DECLINED, CANCELLED, MISSED, BUSY, FAILED, DISCONNECTED, HANDLED_ELSEWHERE`.
 
-Rules enforced by the server: direct conversation only; both users active members; no block in either direction; each user in at most one call; only the callee can accept/decline; only the caller can cancel; either can end.
+Rules enforced by the server:
+- Direct conversations and group conversations (`GROUP` with up to 8 active joined participants via P2P mesh) are supported.
+- All callers/joiners must be active members; blocked users are excluded/rejected; each user is in at most one active call; only the caller can cancel an unanswered call.
+- When joining an ongoing group call, the new participant creates offers toward each already-joined peer (`targetUserId`); each signal relays `fromUserId` to the target participant.
+- Leaving or timing out in a group call sends `call.participant_left` to remaining peers while `>= 2` active participants remain, and finalizes cleanly when `< 2` remain.
 
 ## 4. Signalling contract
 Client -> server (`/app/...`):
@@ -43,19 +47,22 @@ Client -> server (`/app/...`):
 | `call.decline` | `{callId}` |
 | `call.cancel` | `{callId}` |
 | `call.end` | `{callId}` |
-| `call.signal` | `{callId, kind: "offer"|"answer"|"candidate", payload}` (<= 16 KB) |
+| `call.signal` | `{callId, targetUserId?, kind: "offer"|"answer"|"candidate", payload}` (<= 16 KB) |
 
 Server -> client (`/user/queue/events` envelope):
 | `type` | `data` |
 |---|---|
-| `call.incoming` | `{callId, conversationId, caller: UserSummary, type}` |
-| `call.ringing` | `{callId}` (to caller, once the callee is reachable) |
-| `call.accepted` | `{callId}` (caller then creates the offer) |
+| `call.incoming` | `{callId, conversationId, caller: UserSummary, type, isGroup, conversationTitle?, participantCount?}` |
+| `call.ringing` | `{callId, conversationId, type, isGroup, conversationTitle?, participants?}` (to caller) |
+| `call.accepted` | `{callId}` (1:1 caller then creates the offer) |
+| `call.joined` | `{callId, conversationId, isGroup: true, conversationTitle, type, peers}` (group joiner sends offers to `peers`) |
+| `call.participant_joined` | `{callId, conversationId, user}` |
+| `call.participant_left` | `{callId, conversationId, userId, name}` |
 | `call.declined` / `call.cancelled` / `call.busy` / `call.missed` | `{callId}` |
-| `call.handled_elsewhere` | `{callId}` (callee's other tabs stop ringing) |
-| `call.signal` | `{callId, kind, payload}` |
+| `call.handled_elsewhere` | `{callId}` (other tabs stop ringing) |
+| `call.signal` | `{callId, fromUserId, kind, payload}` |
 | `call.ended` | `{callId, reason, durationSec}` |
-| `call.state` | `{callId, state}` (optional sync after reconnect) |
+| `call.state` | `{callId, state, userId}` (optional sync after reconnect) |
 
 ## 5. Negotiation flow
 1. Caller `call.invite` -> server validates -> `call.incoming` to every callee session, `call.ringing` to caller.

@@ -16,6 +16,8 @@ export default function ScheduleModal({
   onConfirm,
   initialDate = null,
   previewText = '',
+  allowMessageInput = false,
+  initialMessage = '',
   attachmentCount = 0,
   confirmLabel = 'Schedule message',
   minLeadSeconds = 60,
@@ -26,6 +28,7 @@ export default function ScheduleModal({
     const base = initialDate ? new Date(initialDate) : new Date(Date.now() + 60 * 60 * 1000)
     return toLocalDateTimeInputValue(base)
   })
+  const [draftMessage, setDraftMessage] = useState(initialMessage)
   const [localError, setLocalError] = useState(null)
 
   const presets = useMemo(() => getSchedulePresets(new Date(), minLeadSeconds), [minLeadSeconds])
@@ -36,13 +39,17 @@ export default function ScheduleModal({
 
   const handleSubmit = (e) => {
     e.preventDefault()
+    if (allowMessageInput && !draftMessage.trim() && attachmentCount === 0) {
+      setLocalError('Please enter a message to schedule.')
+      return
+    }
     const validationErr = validateScheduleDate(parsedDate, minLeadSeconds)
     if (validationErr) {
       setLocalError(validationErr)
       return
     }
     setLocalError(null)
-    onConfirm?.(parsedDate.toISOString())
+    onConfirm?.(parsedDate.toISOString(), allowMessageInput ? draftMessage.trim() : undefined)
   }
 
   const displayError = localError || externalError
@@ -79,17 +86,41 @@ export default function ScheduleModal({
           </button>
         </div>
 
-        {(previewText || attachmentCount > 0) && (
-          <div className="glass-subtle rounded-2xl px-3.5 py-2.5 text-xs text-ink-muted space-y-1">
-            {previewText && (
-              <p className="text-ink line-clamp-2 break-words">{previewText}</p>
-            )}
+        {allowMessageInput ? (
+          <div className="space-y-1.5">
+            <label htmlFor="schedule-message-input" className="block text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">
+              Message
+            </label>
+            <textarea
+              id="schedule-message-input"
+              rows={2}
+              value={draftMessage}
+              onChange={(e) => {
+                setDraftMessage(e.target.value)
+                setLocalError(null)
+              }}
+              placeholder="Write a message to schedule..."
+              className="glass-input w-full rounded-2xl px-3.5 py-2.5 text-sm text-ink resize-none leading-snug"
+            />
             {attachmentCount > 0 && (
               <p className="text-[11px] font-medium text-accent-text">
                 {attachmentCount} attachment{attachmentCount > 1 ? 's' : ''} included
               </p>
             )}
           </div>
+        ) : (
+          (previewText || attachmentCount > 0) && (
+            <div className="glass-subtle rounded-2xl px-3.5 py-2.5 text-xs text-ink-muted space-y-1">
+              {previewText && (
+                <p className="text-ink line-clamp-2 break-words">{previewText}</p>
+              )}
+              {attachmentCount > 0 && (
+                <p className="text-[11px] font-medium text-accent-text">
+                  {attachmentCount} attachment{attachmentCount > 1 ? 's' : ''} included
+                </p>
+              )}
+            </div>
+          )
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">

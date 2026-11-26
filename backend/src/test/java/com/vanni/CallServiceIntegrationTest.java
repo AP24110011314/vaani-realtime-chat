@@ -146,10 +146,13 @@ public class CallServiceIntegrationTest {
         Long directId = createDirectConv(asha, ravi);
         Long groupId = createGroupConv(asha, ravi, meera);
 
-        // Group calls blocked
-        assertThatThrownBy(() -> callService.invite(asha.getId(), groupId, CallType.VIDEO, null))
-            .isInstanceOf(ApiException.class)
-            .hasMessageContaining("direct");
+        // 3-member group call can be initiated cleanly
+        CallSession groupInit = callService.invite(asha.getId(), groupId, CallType.VIDEO, null);
+        assertThat(groupInit).isNotNull();
+        assertThat(groupInit.isGroup()).isTrue();
+        assertThat(groupInit.getInvitedUserIds()).containsExactlyInAnyOrder(ravi.getId(), meera.getId());
+        callService.cancel(asha.getId(), groupInit.getCallId());
+        assertThat(registry.get(groupInit.getCallId())).isEmpty();
 
         // Asha invites Ravi
         CallSession session = callService.invite(asha.getId(), directId, CallType.VIDEO, "c1");
@@ -244,5 +247,50 @@ public class CallServiceIntegrationTest {
         assertThatThrownBy(() -> callService.invite(asha.getId(), directId, CallType.AUDIO, null))
             .isInstanceOf(ApiException.class)
             .hasMessageContaining("blocked");
+    }
+
+    @Test
+    void groupMeshCallSupportsMultiParticipantJoinPartialLeaveAndFinalLog() throws Exception {
+        Long groupId = createGroupConv(asha, ravi, meera);
+
+        // Asha starts group video call -> Ravi & Meera invited
+        CallSession groupCall = callService.invite(asha.getId(), groupId, CallType.VIDEO, "grp-c1");
+        assertThat(groupCall).isNotNull();
+        assertThat(groupCall.isGroup()).isTrue();
+        assertThat(groupCall.getJoinedUserIds()).containsExactly(asha.getId());
+
+        // Ravi accepts -> joins Asha (2 active)
+        callService.accept(ravi.getId(), groupCall.getCallId(), "ravi-tab");
+        assertThat(groupCall.getState()).isEqualTo(CallState.CONNECTING);
+        assertThat(groupCall.getJoinedUserIds()).containsExactlyInAnyOrder(asha.getId(), ravi.getId());
+
+        // Meera accepts -> joins 3-way mesh
+        callService.accept(meera.getId(), groupCall.getCallId(), "meera-tab");
+        assertThat(groupCall.getJoinedUserIds()).containsExactlyInAnyOrder(asha.getId(), ravi.getId(), meera.getId());
+
+        // Relay mesh signal from Meera -> Ravi succeeds, non-targeted fails, non-participant fails
+        callService.relaySignal(meera.getId(), groupCall.getCallId(), "offer", "{\"sdp\":\"v=0\"}", Map.of("sdp", "v=0"), ravi.getId());
+        assertThatThrownBy(() -> callService.relaySignal(meera.getId(), groupCall.getCallId(), "offer", "{}", Map.of(), null))
+            .isInstanceOf(ApiException.class);
+
+        // Mark connected
+        callService.updateState(ravi.getId(), groupCall.getCallId(), "CONNECTED");
+        assertThat(groupCall.getState()).isEqualTo(CallState.CONNECTED);
+
+        // Asha leaves while Ravi & Meera remain -> call stays alive!
+        callService.end(asha.getId(), groupCall.getCallId());
+        assertThat(registry.get(groupCall.getCallId())).isPresent();
+        assertThat(registry.getActiveCallForUser(asha.getId())).isEmpty();
+        assertThat(registry.getActiveCallForUser(ravi.getId())).isPresent();
+        assertThat(groupCall.getJoinedUserIds()).containsExactlyInAnyOrder(ravi.getId(), meera.getId());
+
+        // Ravi leaves -> fewer than 2 remain, so call finalizes cleanly and logs to group
+        callService.end(ravi.getId(), groupCall.getCallId());
+        assertThat(registry.get(groupCall.getCallId())).isEmpty();
+        assertThat(registry.getActiveCallForUser(meera.getId())).isEmpty();
+
+        List<CallLog> logs = callLogRepository.findTop20ByConversationIdOrderByEndedAtDesc(groupId);
+        assertThat(logs).hasSize(1);
+        assertThat(logs.get(0).getEndReason()).isEqualTo(CallEndReason.COMPLETED);
     }
 }
