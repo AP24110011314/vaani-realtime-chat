@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Service
-@ConditionalOnProperty(name = "app.ai.provider", havingValue = "anthropic", matchIfMissing = true)
+@ConditionalOnProperty(name = "app.ai.provider", havingValue = "anthropic")
 public class AnthropicAiSummaryService implements AiSummaryService {
 
     private static final Logger log = LoggerFactory.getLogger(AnthropicAiSummaryService.class);

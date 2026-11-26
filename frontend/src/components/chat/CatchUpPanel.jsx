@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 
 export const AI_CONSENT_NOTICE =
-  "Catch me up sends the text of the messages you missed in this chat to an AI service (Anthropic) so it can write a summary. Other people's messages in this chat are included. Vanni does not keep the summary. You can turn this off at any time in Settings."
+  "Catch me up sends the text of the messages you missed in this chat to an AI service so it can write a summary. Other people's messages in this chat are included. Vanni does not keep the summary. You can turn this off at any time in Settings."
 
 export const CATCH_UP_UNREAD_THRESHOLD = 15
 

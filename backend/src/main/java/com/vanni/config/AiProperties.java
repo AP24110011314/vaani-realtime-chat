@@ -13,9 +13,12 @@ import org.springframework.stereotype.Component;
 public class AiProperties {
 
     private boolean featuresEnabled = false;
-    private String provider = "anthropic";
+    private String provider = "gemini";
     private String apiKey = "";
     private String model = "claude-haiku-4-5";
+    private String geminiApiKey = "";
+    private String geminiModel = "gemini-2.5-flash";
+    private String geminiBaseUrl = "https://generativelanguage.googleapis.com";
     private int maxInputChars = 60000;
     private int timeoutSeconds = 30;
     private int ratePerHour = 10;
@@ -23,8 +26,12 @@ public class AiProperties {
 
     @PostConstruct
     public void validate() {
-        if (featuresEnabled && "anthropic".equalsIgnoreCase(provider) && (apiKey == null || apiKey.isBlank())) {
+        if (!featuresEnabled) return;
+        if ("anthropic".equalsIgnoreCase(provider) && (apiKey == null || apiKey.isBlank())) {
             throw new IllegalStateException("ANTHROPIC_API_KEY must be set when AI_FEATURES_ENABLED=true and AI_PROVIDER=anthropic");
+        }
+        if ("gemini".equalsIgnoreCase(provider) && (geminiApiKey == null || geminiApiKey.isBlank())) {
+            throw new IllegalStateException("GEMINI_API_KEY must be set when AI_FEATURES_ENABLED=true and AI_PROVIDER=gemini");
         }
     }
 }

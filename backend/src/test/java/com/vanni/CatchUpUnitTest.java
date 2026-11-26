@@ -1,18 +1,26 @@
 package com.vanni;
 
+import com.sun.net.httpserver.HttpServer;
+import com.vanni.config.AiProperties;
 import com.vanni.dto.response.CatchUpSummaryDto;
 import com.vanni.entity.Attachment;
 import com.vanni.entity.Message;
 import com.vanni.entity.MessageType;
 import com.vanni.entity.User;
+import com.vanni.service.AiSummaryService;
+import com.vanni.service.GeminiAiSummaryService;
 import com.vanni.util.AiSummaryParser;
 import com.vanni.util.TranscriptBuilder;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -107,5 +115,45 @@ public class CatchUpUnitTest {
         assertThat(result.transcript()).contains("You: [file: design-v2.pdf]");
         assertThat(result.truncated()).isTrue();
         assertThat(result.includedMessageIds()).containsExactlyInAnyOrder(13L, 14L);
+    }
+
+    @Test
+    void geminiClientSendsHeaderKeyAndParsesCandidates() throws Exception {
+        AtomicReference<String> seenKeyHeader = new AtomicReference<>();
+        HttpServer mockGemini = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        mockGemini.createContext("/v1beta/models/gemini-2.5-flash:generateContent", ex -> {
+            seenKeyHeader.set(ex.getRequestHeaders().getFirst("x-goog-api-key"));
+            String payload = """
+                {
+                  "candidates": [
+                    { "content": { "parts": [{ "text": "{\\"overview\\":\\"Team synced on deploy.\\",\\"keyPoints\\":[],\\"decisions\\":[],\\"actionItems\\":[],\\"forYou\\":[]}" }] } }
+                  ],
+                  "usageMetadata": { "promptTokenCount": 42, "candidatesTokenCount": 18 }
+                }
+                """;
+            byte[] b = payload.getBytes(StandardCharsets.UTF_8);
+            ex.getResponseHeaders().set("Content-Type", "application/json");
+            ex.sendResponseHeaders(200, b.length);
+            try (OutputStream os = ex.getResponseBody()) { os.write(b); }
+        });
+        mockGemini.start();
+
+        try {
+            AiProperties props = new AiProperties();
+            props.setFeaturesEnabled(true);
+            props.setProvider("gemini");
+            props.setGeminiApiKey("fake-gemini-key");
+            props.setGeminiModel("gemini-2.5-flash");
+            props.setGeminiBaseUrl("http://127.0.0.1:" + mockGemini.getAddress().getPort());
+
+            GeminiAiSummaryService client = new GeminiAiSummaryService(props);
+            AiSummaryService.AiResult res = client.summarize("[#1] 09:00 Asha: Deploy ready", false);
+            assertThat(seenKeyHeader.get()).isEqualTo("fake-gemini-key");
+            assertThat(res.inputTokens()).isEqualTo(42);
+            assertThat(res.outputTokens()).isEqualTo(18);
+            assertThat(res.rawJson()).contains("Team synced on deploy.");
+        } finally {
+            mockGemini.stop(0);
+        }
     }
 }

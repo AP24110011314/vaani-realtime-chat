@@ -38,9 +38,12 @@ app:
     max-pending-per-user: ${SCHEDULE_MAX_PENDING_PER_USER:50}
   ai:
     features-enabled: ${AI_FEATURES_ENABLED:false}
-    provider: ${AI_PROVIDER:anthropic}
+    provider: ${AI_PROVIDER:gemini}
     api-key: ${ANTHROPIC_API_KEY:}
     model: ${AI_MODEL:claude-haiku-4-5}
+    gemini-api-key: ${GEMINI_API_KEY:}
+    gemini-model: ${GEMINI_MODEL:gemini-2.5-flash}
+    gemini-base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
     max-input-chars: ${AI_MAX_INPUT_CHARS:60000}
     timeout-seconds: ${AI_TIMEOUT_SECONDS:30}
     rate-per-hour: ${AI_RATE_PER_HOUR:10}

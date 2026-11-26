@@ -7,4 +7,4 @@ logging:
 app:
   ai:
     features-enabled: ${AI_FEATURES_ENABLED:true}
-    provider: ${AI_PROVIDER:fake}
+    provider: ${AI_PROVIDER:auto}
