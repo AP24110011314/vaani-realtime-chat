@@ -64,6 +64,9 @@ public class UserService {
         if (req.linkPreviewsEnabled() != null) {
             user.setLinkPreviewsEnabled(req.linkPreviewsEnabled());
         }
+        if (req.callsRelayOnly() != null) {
+            user.setCallsRelayOnly(req.callsRelayOnly());
+        }
 
         user = userRepository.save(user);
         if (profileChanged) {

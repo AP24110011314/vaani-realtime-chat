@@ -13,6 +13,9 @@ import {
   Smile,
   Info,
   Link2Off,
+  Phone,
+  Video,
+  PhoneMissed,
 } from 'lucide-react'
 import { AuthContext } from '../../context/AuthContext'
 import AttachmentPreview from './AttachmentPreview'
@@ -201,6 +204,7 @@ export default function MessageBubble({
   onToggleReaction,
   onJumpToMessage,
   onMentionClick,
+  onCallBack,
 }) {
   const authContext = useContext(AuthContext)
   const linkPreviewsEnabled = authContext?.user?.linkPreviewsEnabled ?? true
@@ -212,6 +216,7 @@ export default function MessageBubble({
   const isFailed = message.failed
   const isDeleted = message.deleted
   const isSystem = message.messageType === 'SYSTEM' || message.type === 'SYSTEM'
+  const isCall = message.messageType === 'CALL' || message.type === 'CALL'
   const status = message.status || 'SENT'
   const isRead = status === 'READ'
   const isDelivered = status === 'DELIVERED'
@@ -252,6 +257,41 @@ export default function MessageBubble({
         <span className="text-[11px] font-medium glass-subtle text-ink-muted px-3.5 py-1 rounded-full">
           {message.content}
         </span>
+      </div>
+    )
+  }
+
+  if (isCall) {
+    const callType = message.callLog?.callType || (message.content?.toLowerCase().includes('video') ? 'VIDEO' : 'AUDIO')
+    const endReason = message.callLog?.endReason || ''
+    const isMissed = endReason === 'MISSED' || endReason === 'DECLINED' || endReason === 'CANCELLED' || endReason === 'BUSY'
+    const Icon = isMissed ? PhoneMissed : callType === 'VIDEO' ? Video : Phone
+    return (
+      <div className="flex justify-center my-2.5">
+        <div className="glass-subtle rounded-2xl px-3.5 py-2 flex items-center gap-2.5 text-xs">
+          <span className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
+            isMissed
+              ? 'bg-[var(--danger-bg)] text-[var(--danger-text)]'
+              : 'accent-badge'
+          }`}>
+            <Icon className="w-3.5 h-3.5" />
+          </span>
+          <div className="min-w-0">
+            <p className="font-semibold text-ink truncate">{message.content}</p>
+            {message.createdAt && (
+              <p className="text-[10px] text-ink-subtle">{formatTime(message.createdAt)}</p>
+            )}
+          </div>
+          {!isGroup && onCallBack && (
+            <button
+              type="button"
+              onClick={() => onCallBack(callType)}
+              className="px-2.5 py-1 rounded-full text-[11px] font-semibold glass hover:bg-[var(--glass-bg-hover)] text-accent-text cursor-pointer focus-accent flex-shrink-0"
+            >
+              Call back
+            </button>
+          )}
+        </div>
       </div>
     )
   }

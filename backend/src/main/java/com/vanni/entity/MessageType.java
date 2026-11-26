@@ -5,5 +5,6 @@ public enum MessageType {
     IMAGE,
     FILE,
     SYSTEM,
-    VOICE
+    VOICE,
+    CALL
 }

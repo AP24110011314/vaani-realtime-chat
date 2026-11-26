@@ -3,8 +3,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from './context/ThemeContext'
 import { AuthProvider } from './context/AuthContext'
 import { SocketProvider } from './context/SocketContext'
+import { CallProvider } from './context/CallContext'
 import AppRoutes from './routes/AppRoutes'
 import GlassBackdrop from './components/common/GlassBackdrop'
+import IncomingCallOverlay from './components/call/IncomingCallOverlay'
+import CallScreen from './components/call/CallScreen'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,9 +26,13 @@ export default function App() {
         <BrowserRouter>
           <AuthProvider>
             <SocketProvider>
-              <div className="relative z-10 min-h-screen">
-                <AppRoutes />
-              </div>
+              <CallProvider>
+                <div className="relative z-10 min-h-screen">
+                  <AppRoutes />
+                </div>
+                <IncomingCallOverlay />
+                <CallScreen />
+              </CallProvider>
             </SocketProvider>
           </AuthProvider>
         </BrowserRouter>

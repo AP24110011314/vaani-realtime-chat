@@ -52,6 +52,10 @@ public class User {
     @Column(name = "ai_consent_at")
     private Instant aiConsentAt;
 
+    @Column(name = "calls_relay_only", nullable = false)
+    @Builder.Default
+    private boolean callsRelayOnly = false;
+
     @Column(nullable = false)
     @Builder.Default
     private boolean enabled = true;

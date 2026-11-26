@@ -1,0 +1,2 @@
+ALTER TABLE messages
+    MODIFY message_type ENUM('TEXT','IMAGE','FILE','SYSTEM','VOICE','CALL') NOT NULL DEFAULT 'TEXT';

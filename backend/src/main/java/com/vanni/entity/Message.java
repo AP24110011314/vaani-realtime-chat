@@ -54,6 +54,10 @@ public class Message {
     @Builder.Default
     private boolean mentionsAll = false;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "call_log_id")
+    private CallLog callLog;
+
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) {

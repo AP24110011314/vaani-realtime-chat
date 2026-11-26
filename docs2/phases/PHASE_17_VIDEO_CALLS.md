@@ -34,12 +34,12 @@ Out (stretch): group calls, call recording, screen share (add last if time allow
 Backend: state machine (every transition and illegal transition), busy, timeout -> missed, non-participant signal rejected, size/rate limits, multi-tab accept-once, ICE credential HMAC format, block rules, disconnect grace. Frontend: `useCall` with a mocked `RTCPeerConnection`. **Playwright:** two contexts with `--use-fake-device-for-media-stream --use-fake-ui-for-media-stream`; A calls B, B accepts, assert both `RTCPeerConnection.connectionState === 'connected'` and remote video has `currentTime` advancing; decline, cancel, busy and missed flows.
 
 ## Acceptance checklist
-- [ ] Voice and video calls connect between two browsers on the same machine and between two devices on the same Wi-Fi.
-- [ ] Decline, cancel, busy, missed and hang-up all leave the correct call-history message and free both users.
-- [ ] Mute and camera toggles work and are visible to the other side.
-- [ ] Killing one tab or the network ends or recovers the call cleanly, with no stuck "in call" state.
+- [x] Voice and video calls connect between two browsers on the same machine and between two devices on the same Wi-Fi.
+- [x] Decline, cancel, busy, missed and hang-up all leave the correct call-history message and free both users.
+- [x] Mute and camera toggles work and are visible to the other side.
+- [x] Killing one tab or the network ends or recovers the call cleanly, with no stuck "in call" state.
 - [ ] Across different networks a call connects through TURN (test with a hosted TURN server).
-- [ ] Camera/microphone indicator turns off after every call.
+- [x] Camera/microphone indicator turns off after every call.
 
 ## Commit
 ```bash

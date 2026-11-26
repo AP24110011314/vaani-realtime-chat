@@ -50,6 +50,7 @@ export default function MessageList({
   onSendQuickReply,
   highlightedMessageId,
   onMentionClick,
+  onCallBack,
 }) {
   const containerRef = useRef(null)
   const previousScrollHeightRef = useRef(0)
@@ -314,6 +315,7 @@ export default function MessageList({
                 onToggleReaction={onToggleReaction}
                 onJumpToMessage={jumpToMessage}
                 onMentionClick={onMentionClick}
+                onCallBack={onCallBack}
               />
             </div>
           )

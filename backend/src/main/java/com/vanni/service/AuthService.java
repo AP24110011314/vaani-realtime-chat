@@ -211,7 +211,8 @@ public class AuthService {
             user.isShowReadReceipts(),
             user.isLinkPreviewsEnabled(),
             user.isAiEnabled(),
-            user.getAiConsentAt()
+            user.getAiConsentAt(),
+            user.isCallsRelayOnly()
         );
     }
 

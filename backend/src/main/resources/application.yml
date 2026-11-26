@@ -45,6 +45,13 @@ app:
     timeout-seconds: ${AI_TIMEOUT_SECONDS:30}
     rate-per-hour: ${AI_RATE_PER_HOUR:10}
     rate-per-day: ${AI_RATE_PER_DAY:30}
+  calls:
+    stun-urls: ${CALLS_STUN_URLS:stun:stun.l.google.com:19302}
+    turn-urls: ${CALLS_TURN_URLS:}
+    turn-secret: ${TURN_SECRET:}
+    turn-ttl-seconds: ${TURN_TTL_SECONDS:3600}
+    ring-timeout-seconds: ${CALLS_RING_TIMEOUT_SECONDS:45}
+    disconnect-grace-seconds: ${CALLS_DISCONNECT_GRACE_SECONDS:10}
 
 storage:
   provider: ${STORAGE_PROVIDER:local}

@@ -74,7 +74,7 @@ public class SecurityConfig {
                     .frameOptions(HeadersConfigurer.FrameOptionsConfig::deny)
                     .referrerPolicy(r -> r.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER))
                     .contentSecurityPolicy(csp -> csp.policyDirectives(cspPolicy))
-                    .addHeaderWriter(new StaticHeadersWriter("Permissions-Policy", "camera=(), microphone=(self), geolocation=()"));
+                    .addHeaderWriter(new StaticHeadersWriter("Permissions-Policy", "camera=(self), microphone=(self), geolocation=()"));
                 if (hstsEnabled) {
                     headers.httpStrictTransportSecurity(hsts -> hsts
                         .includeSubDomains(true)

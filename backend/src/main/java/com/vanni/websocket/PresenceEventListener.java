@@ -18,10 +18,15 @@ public class PresenceEventListener {
 
     private final PresenceService presenceService;
     private final com.vanni.service.ReceiptService receiptService;
+    private final com.vanni.service.CallService callService;
 
-    public PresenceEventListener(PresenceService presenceService, com.vanni.service.ReceiptService receiptService) {
+    public PresenceEventListener(
+            PresenceService presenceService,
+            com.vanni.service.ReceiptService receiptService,
+            @org.springframework.context.annotation.Lazy com.vanni.service.CallService callService) {
         this.presenceService = presenceService;
         this.receiptService = receiptService;
+        this.callService = callService;
     }
 
     @EventListener
@@ -35,6 +40,7 @@ public class PresenceEventListener {
             log.debug("Session connected event: user={}, session={}", userId, sessionId);
             presenceService.onSessionConnected(sessionId, userId);
             receiptService.markPendingDeliveredForUser(userId);
+            callService.onUserReconnected(userId);
         } catch (NumberFormatException e) {
             log.warn("Non-numeric principal name on SessionConnectedEvent: {}", principal.getName());
         }
@@ -44,6 +50,10 @@ public class PresenceEventListener {
     public void handleSessionDisconnect(SessionDisconnectEvent event) {
         String sessionId = event.getSessionId();
         log.debug("Session disconnected event: session={}", sessionId);
-        presenceService.onSessionDisconnected(sessionId);
+        Long userId = presenceService.getUserIdForSession(sessionId);
+        boolean allOffline = presenceService.onSessionDisconnected(sessionId);
+        if (allOffline && userId != null) {
+            callService.onUserDisconnected(userId);
+        }
     }
 }

@@ -56,11 +56,11 @@ public class PresenceService {
     }
 
     @Transactional
-    public void onSessionDisconnected(String sessionId) {
-        if (sessionId == null) return;
+    public boolean onSessionDisconnected(String sessionId) {
+        if (sessionId == null) return false;
 
         Long userId = sessionToUser.remove(sessionId);
-        if (userId == null) return;
+        if (userId == null) return false;
 
         AtomicInteger counter = sessionCounts.get(userId);
         if (counter != null && counter.decrementAndGet() <= 0) {
@@ -81,13 +81,19 @@ public class PresenceService {
 
             PresenceDto presence = new PresenceDto(userId, false, publicLastSeen);
             broadcastPresenceToMutualMembers(userId, presence);
+            return true;
         }
+        return false;
     }
 
     public boolean isOnline(Long userId) {
         if (userId == null) return false;
         AtomicInteger counter = sessionCounts.get(userId);
         return counter != null && counter.get() > 0;
+    }
+
+    public Long getUserIdForSession(String sessionId) {
+        return sessionId != null ? sessionToUser.get(sessionId) : null;
     }
 
     @Transactional(readOnly = true)

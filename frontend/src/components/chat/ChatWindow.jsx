@@ -10,6 +10,7 @@ import { aiApi } from '../../api/aiApi'
 import { userApi } from '../../api/userApi'
 import { formatScheduledTime } from '../../lib/scheduleUtils'
 import { AuthContext } from '../../context/AuthContext'
+import { useCall } from '../../hooks/useCall'
 import { useSocket } from '../../hooks/useSocket'
 import { useTyping } from '../../hooks/useTyping'
 import ChatHeader from './ChatHeader'
@@ -32,6 +33,7 @@ export default function ChatWindow({
   const authCtx = useContext(AuthContext)
   const user = authCtx?.user || null
   const updateUser = authCtx?.updateUser
+  const { startCall } = useCall()
   const { isConnected, sendMessage, setActiveConversationId, setIsChatAtBottom, removedEvent, sendRead } = useSocket()
   const { typingText, handleKeyStroke, handleStopTyping } = useTyping(conversationId)
   const [olderMessages, setOlderMessages] = useState([])
@@ -587,6 +589,14 @@ export default function ChatWindow({
               setSelectedMentionMember(member)
             }
           }}
+          onCallBack={
+            conversation?.type === 'DIRECT'
+              ? (callType) => {
+                  const peer = conversation.members?.find((m) => m.id !== currentUserId) || conversation.members?.[0]
+                  if (peer) startCall({ conversationId, peer, type: callType })
+                }
+              : undefined
+          }
           onBottomStateChange={setIsChatAtBottom}
           onNearBottom={() => {
             const isFocused = typeof document !== 'undefined' && (typeof document.hasFocus !== 'function' || document.hasFocus())

@@ -12,7 +12,8 @@ public record UserMeResponse(
     boolean showReadReceipts,
     boolean linkPreviewsEnabled,
     boolean aiEnabled,
-    Instant aiConsentAt
+    Instant aiConsentAt,
+    boolean callsRelayOnly
 ) {
     public UserMeResponse(
         Long id,
@@ -23,7 +24,7 @@ public record UserMeResponse(
         boolean showLastSeen,
         boolean showReadReceipts
     ) {
-        this(id, name, email, avatarUrl, about, showLastSeen, showReadReceipts, true, false, null);
+        this(id, name, email, avatarUrl, about, showLastSeen, showReadReceipts, true, false, null, false);
     }
 
     public UserMeResponse(
@@ -36,6 +37,21 @@ public record UserMeResponse(
         boolean showReadReceipts,
         boolean linkPreviewsEnabled
     ) {
-        this(id, name, email, avatarUrl, about, showLastSeen, showReadReceipts, linkPreviewsEnabled, false, null);
+        this(id, name, email, avatarUrl, about, showLastSeen, showReadReceipts, linkPreviewsEnabled, false, null, false);
+    }
+
+    public UserMeResponse(
+        Long id,
+        String name,
+        String email,
+        String avatarUrl,
+        String about,
+        boolean showLastSeen,
+        boolean showReadReceipts,
+        boolean linkPreviewsEnabled,
+        boolean aiEnabled,
+        Instant aiConsentAt
+    ) {
+        this(id, name, email, avatarUrl, about, showLastSeen, showReadReceipts, linkPreviewsEnabled, aiEnabled, aiConsentAt, false);
     }
 }

@@ -95,6 +95,7 @@ test.describe('Vanni Phase 9 E2E (Two Browsers, Realtime, Groups, Security, Mobi
     await expect(pageA.getByRole('log').getByText(/Hello Ravi <script>alert\("xss"\)<\/script>/)).toBeVisible()
 
     // 4. Ravi receives conversation + message live in browser B and sends read receipt by opening it
+    await pageB.bringToFront()
     await pageB.getByRole('button', { name: new RegExp(`Asha ${ts}`) }).click()
     await expect(pageB.getByRole('log').getByText(/Hello Ravi <script>alert\("xss"\)<\/script>/)).toBeVisible({ timeout: 10000 })
     expect(alertTriggered).toBe(false)
@@ -363,6 +364,48 @@ test.describe('Vanni Phase 9 E2E (Two Browsers, Realtime, Groups, Security, Mobi
     await catchUpPanel.getByRole('button', { name: 'Dismiss' }).click()
     await expect(catchUpPanel).toBeHidden()
 
+    // 6h. Phase 17 1:1 Voice & Video Calls (Chrome fake media streams)
+    await pageA.locator('aside').getByRole('button', { name: new RegExp(`^R\\s+(Online\\s+)?Ravi ${ts}`) }).click()
+    await pageB.locator('aside').getByRole('button', { name: new RegExp(`^A\\s+(Online\\s+)?Asha ${ts}`) }).click()
+    await expect(pageA.getByRole('button', { name: 'Video call' })).toBeVisible({ timeout: 5000 })
+
+    // Video call: A invites B -> B accepts -> WebRTC reaches connected + remote video currentTime > 0
+    await pageA.getByRole('button', { name: 'Video call' }).click()
+    const callDialogA = pageA.getByRole('dialog', { name: 'Active call' })
+    await expect(callDialogA).toBeVisible({ timeout: 5000 })
+
+    const incomingDialogB = pageB.getByRole('dialog', { name: 'Incoming call' })
+    await expect(incomingDialogB).toBeVisible({ timeout: 10000 })
+    await incomingDialogB.getByRole('button', { name: 'Accept call' }).click()
+
+    const callDialogB = pageB.getByRole('dialog', { name: 'Active call' })
+    await expect(callDialogA).toHaveAttribute('data-connection-state', 'connected', { timeout: 15000 })
+    await expect(callDialogB).toHaveAttribute('data-connection-state', 'connected', { timeout: 15000 })
+
+    await expect(async () => {
+      const t = await pageB.getByTestId('remote-video').evaluate((el) => el.currentTime)
+      expect(t).toBeGreaterThan(0)
+    }).toPass({ timeout: 10000 })
+
+    // Toggle mute & end call cleanly
+    await callDialogA.getByRole('button', { name: 'Mute microphone' }).click()
+    await expect(callDialogA.getByRole('button', { name: 'Unmute microphone' })).toBeVisible()
+    await callDialogA.getByRole('button', { name: 'End call' }).click()
+    await expect(callDialogA).toBeHidden({ timeout: 5000 })
+    await expect(callDialogB).toBeHidden({ timeout: 5000 })
+    await expect(pageA.getByRole('log').getByText(/Video call/).first()).toBeVisible({ timeout: 10000 })
+
+    // Decline flow: A starts voice call -> B declines -> Declined voice call log pill appears
+    await pageA.getByRole('button', { name: 'Voice call' }).click()
+    await expect(incomingDialogB).toBeVisible({ timeout: 10000 })
+    await incomingDialogB.getByRole('button', { name: 'Decline call' }).click()
+    await expect(callDialogA).toBeHidden({ timeout: 5000 })
+    await expect(pageA.getByRole('log').getByText('Declined voice call')).toBeVisible({ timeout: 10000 })
+
+    // Switch back to group chat for mobile & reload assertions
+    await pageA.getByRole('button', { name: new RegExp(`E2E Squad ${ts}`) }).first().click()
+    await pageB.getByRole('button', { name: new RegExp(`E2E Squad ${ts}`) }).first().click()
+
     // 7. Mobile 390px viewport check on Context B
     await pageB.setViewportSize({ width: 390, height: 844 })
     await expect(pageB.getByRole('button', { name: 'Back to conversations' })).toBeVisible()
@@ -381,6 +424,8 @@ test.describe('Vanni Phase 9 E2E (Two Browsers, Realtime, Groups, Security, Mobi
     await pageA.goto('/settings')
     await expect(pageA.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible()
     await expect(pageA.getByRole('button', { name: 'Toggle link previews' })).toBeVisible()
+    await expect(pageA.getByRole('button', { name: 'Toggle relay-only calls' })).toBeVisible()
+    await expect(pageA.getByRole('button', { name: 'Toggle AI features' })).toBeVisible()
     await pageA.getByRole('button', { name: 'Dark', exact: true }).click()
     await expect(pageA.locator('html')).toHaveClass(/\bdark\b/)
 

@@ -11,8 +11,11 @@ import {
   Ban,
   UserCheck,
   Sparkles,
+  Phone,
+  Video,
 } from 'lucide-react'
 import { usePresence } from '../../hooks/usePresence'
+import { useCall } from '../../hooks/useCall'
 import { formatLastSeen } from '../../lib/formatters'
 import { searchApi } from '../../api/searchApi'
 import { userApi } from '../../api/userApi'
@@ -40,6 +43,7 @@ export default function ChatHeader({
   const [isTogglingBlock, setIsTogglingBlock] = useState(false)
   const [isPeerBlocked, setIsPeerBlocked] = useState(false)
   const searchInputRef = useRef(null)
+  const { callState, startCall } = useCall()
 
   // Resolve peer if direct chat
   const peer = !isGroup
@@ -248,6 +252,35 @@ export default function ChatHeader({
 
           {/* Glass Action Button Group */}
           <div className="glass-subtle rounded-2xl p-1 flex items-center gap-0.5">
+            {!isGroup && peer?.id && !isPeerBlocked && (
+              <>
+                <button
+                  type="button"
+                  disabled={callState !== 'idle'}
+                  onClick={() =>
+                    startCall({ conversationId: conversation.id, peer, type: 'AUDIO' })
+                  }
+                  className="p-1.5 text-ink-muted hover:text-accent-text hover:bg-[var(--glass-bg-hover)] rounded-xl transition-all active:scale-95 focus-accent cursor-pointer disabled:opacity-40"
+                  title="Voice call"
+                  aria-label="Voice call"
+                >
+                  <Phone className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  disabled={callState !== 'idle'}
+                  onClick={() =>
+                    startCall({ conversationId: conversation.id, peer, type: 'VIDEO' })
+                  }
+                  className="p-1.5 text-ink-muted hover:text-accent-text hover:bg-[var(--glass-bg-hover)] rounded-xl transition-all active:scale-95 focus-accent cursor-pointer disabled:opacity-40"
+                  title="Video call"
+                  aria-label="Video call"
+                >
+                  <Video className="w-4 h-4" />
+                </button>
+              </>
+            )}
+
             {onCatchUp && (
               <button
                 type="button"

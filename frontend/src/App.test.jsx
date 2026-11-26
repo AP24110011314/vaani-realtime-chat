@@ -39,6 +39,11 @@ import SettingsPage from './pages/SettingsPage'
 import ScheduledPage from './pages/ScheduledPage'
 import CatchUpPanel from './components/chat/CatchUpPanel'
 import { aiApi } from './api/aiApi'
+import { callApi } from './api/callApi'
+import { CallProvider } from './context/CallContext'
+import IncomingCallOverlay from './components/call/IncomingCallOverlay'
+import CallScreen from './components/call/CallScreen'
+import { WebRtcPeer, formatCallDuration } from './lib/webrtc'
 import { ThemeProvider } from './context/ThemeContext'
 import { userApi } from './api/userApi'
 import { authApi } from './api/authApi'
@@ -2015,6 +2020,114 @@ describe('Phase 5 Groups, Presence & System Messages', () => {
 
       blockedSpy.mockRestore()
       consentSpy.mockRestore()
+    })
+  })
+
+  describe('Phase 17 1:1 Voice and Video Calls', () => {
+    it('queues ICE candidates until remote description is set and relays offer/answer', async () => {
+      const addIceSpy = vi.fn().mockResolvedValue(undefined)
+      const setRemoteSpy = vi.fn().mockResolvedValue(undefined)
+      const setLocalSpy = vi.fn().mockResolvedValue(undefined)
+      const createOfferSpy = vi.fn().mockResolvedValue({ type: 'offer', sdp: 'v=0' })
+      const createAnswerSpy = vi.fn().mockResolvedValue({ type: 'answer', sdp: 'v=0' })
+      const closeSpy = vi.fn()
+
+      class MockPeerConnection {
+        constructor() {
+          this.localDescription = null
+          this.connectionState = 'new'
+        }
+        addTrack() {}
+        async createOffer() { return createOfferSpy() }
+        async createAnswer() { return createAnswerSpy() }
+        async setLocalDescription(desc) { this.localDescription = desc; return setLocalSpy(desc) }
+        async setRemoteDescription(desc) { return setRemoteSpy(desc) }
+        async addIceCandidate(c) { return addIceSpy(c) }
+        getSenders() { return [] }
+        close() { closeSpy() }
+      }
+
+      const prevPc = globalThis.RTCPeerConnection
+      const prevSdp = globalThis.RTCSessionDescription
+      const prevIce = globalThis.RTCIceCandidate
+      const prevStream = globalThis.MediaStream
+      globalThis.RTCPeerConnection = MockPeerConnection
+      globalThis.RTCSessionDescription = function (d) { return d }
+      globalThis.RTCIceCandidate = function (c) { return c }
+      globalThis.MediaStream = function () { return { addTrack() {}, getTracks: () => [] } }
+
+      try {
+        const peer = new WebRtcPeer({ iceServers: [], relayOnly: false })
+        await peer.addCandidate({ candidate: 'candidate:early' })
+        expect(addIceSpy).not.toHaveBeenCalled()
+
+        await peer.acceptOffer({ type: 'offer', sdp: 'remote-sdp' })
+        expect(setRemoteSpy).toHaveBeenCalledTimes(1)
+        expect(createAnswerSpy).toHaveBeenCalledTimes(1)
+        expect(addIceSpy).toHaveBeenCalledTimes(1)
+
+        const offer = await peer.createOffer()
+        expect(offer.type).toBe('offer')
+        peer.close()
+        expect(closeSpy).toHaveBeenCalledTimes(1)
+      } finally {
+        globalThis.RTCPeerConnection = prevPc
+        globalThis.RTCSessionDescription = prevSdp
+        globalThis.RTCIceCandidate = prevIce
+        globalThis.MediaStream = prevStream
+      }
+      expect(formatCallDuration(125)).toBe('2:05')
+    })
+
+    it('renders CALL history bubble with call-back button and toggles relay-only setting', async () => {
+      const onCallBack = vi.fn()
+      const callMsg = {
+        id: 801,
+        type: 'CALL',
+        messageType: 'CALL',
+        content: 'Video call · 1:15',
+        createdAt: '2026-11-26T01:00:00Z',
+        sender: { id: 2, name: 'Ravi' },
+        callLog: { id: 10, callType: 'VIDEO', endReason: 'COMPLETED', durationSec: 75 },
+      }
+
+      render(<MessageBubble message={callMsg} isMine={false} isGroup={false} onCallBack={onCallBack} />)
+      expect(screen.getByText('Video call · 1:15')).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Call back' }))
+      expect(onCallBack).toHaveBeenCalledWith('VIDEO')
+
+      const blockedSpy = vi.spyOn(userApi, 'getBlocked').mockResolvedValueOnce([])
+      const updateMeSpy = vi.spyOn(authApi, 'updateMe').mockResolvedValueOnce({
+        id: 1,
+        name: 'Asha',
+        email: 'asha@vanni.app',
+        callsRelayOnly: true,
+      })
+      const qc = createTestQueryClient()
+      render(
+        <QueryClientProvider client={qc}>
+          <ThemeProvider>
+            <AuthContext.Provider value={{ user: { id: 1, name: 'Asha', callsRelayOnly: false }, updateUser: vi.fn(), logout: vi.fn() }}>
+              <CallProvider>
+                <MemoryRouter>
+                  <SettingsPage />
+                </MemoryRouter>
+                <IncomingCallOverlay />
+                <CallScreen />
+              </CallProvider>
+            </AuthContext.Provider>
+          </ThemeProvider>
+        </QueryClientProvider>
+      )
+
+      expect(callApi.getIceServers).toBeDefined()
+      fireEvent.click(screen.getByRole('button', { name: 'Toggle relay-only calls' }))
+      await waitFor(() => {
+        expect(updateMeSpy).toHaveBeenCalledWith({ callsRelayOnly: true })
+      })
+
+      blockedSpy.mockRestore()
+      updateMeSpy.mockRestore()
     })
   })
 })

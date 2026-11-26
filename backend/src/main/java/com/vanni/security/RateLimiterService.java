@@ -28,6 +28,7 @@ public class RateLimiterService {
     private final Map<Long, Bucket> mentionAllBuckets = new ConcurrentHashMap<>();
     private final Map<Long, Bucket> inviteBuckets = new ConcurrentHashMap<>();
     private final Map<Long, Bucket> linkPreviewBuckets = new ConcurrentHashMap<>();
+    private final Map<Long, Bucket> callSignalBuckets = new ConcurrentHashMap<>();
 
     // 5 attempts per minute per key (IP + email), plus exponential lockout after repeated failures
     public boolean tryConsumeLogin(String key) {
@@ -122,6 +123,14 @@ public class RateLimiterService {
     public boolean tryConsumeLinkPreview(Long userId) {
         Bucket bucket = linkPreviewBuckets.computeIfAbsent(userId, k -> Bucket.builder()
             .addLimit(Bandwidth.builder().capacity(20).refillIntervally(20, Duration.ofMinutes(1)).build())
+            .build());
+        return bucket.tryConsume(1);
+    }
+
+    // 60 WebRTC signal relays per 10 seconds per user
+    public boolean tryConsumeCallSignal(Long userId) {
+        Bucket bucket = callSignalBuckets.computeIfAbsent(userId, k -> Bucket.builder()
+            .addLimit(Bandwidth.builder().capacity(60).refillIntervally(60, Duration.ofSeconds(10)).build())
             .build());
         return bucket.tryConsume(1);
     }

@@ -40,6 +40,8 @@ const defaultSocketContextValue = {
   sendTyping: () => false,
   sendDelivered: () => false,
   sendRead: () => false,
+  publishStomp: () => false,
+  subscribeCallEvents: () => () => {},
   fetchPresence: () => {},
   presenceMap: {},
   typingMap: {},
@@ -70,6 +72,12 @@ export function SocketProvider({ children }) {
   const needsRefreshOnReconnectRef = useRef(false)
   const currentUserIdRef = useRef(user?.id)
   const toastTimerRef = useRef(null)
+  const callListenersRef = useRef(new Set())
+
+  const subscribeCallEvents = useCallback((listener) => {
+    callListenersRef.current.add(listener)
+    return () => callListenersRef.current.delete(listener)
+  }, [])
 
   const setIsChatAtBottom = useCallback((atBottom) => {
     isChatAtBottomRef.current = Boolean(atBottom)
@@ -153,6 +161,17 @@ export function SocketProvider({ children }) {
     (envelope) => {
       if (!envelope || !envelope.type) return
       const { type, data } = envelope
+
+      if (type.startsWith('call.')) {
+        callListenersRef.current.forEach((fn) => {
+          try {
+            fn(type, data)
+          } catch (err) {
+            console.warn('Call listener error:', err)
+          }
+        })
+        return
+      }
 
       switch (type) {
         case 'message.created': {
@@ -700,6 +719,20 @@ export function SocketProvider({ children }) {
   }, [])
 
   // Fetch presence snapshot for a set of user IDs
+  const publishStomp = useCallback((destination, body) => {
+    const client = clientRef.current
+    if (!client || !client.connected) return false
+    try {
+      client.publish({
+        destination,
+        body: JSON.stringify(body),
+      })
+      return true
+    } catch {
+      return false
+    }
+  }, [])
+
   const fetchPresence = useCallback(async (userIds) => {
     if (!userIds || userIds.length === 0) return
     try {
@@ -777,6 +810,8 @@ export function SocketProvider({ children }) {
     sendTyping,
     sendDelivered,
     sendRead,
+    publishStomp,
+    subscribeCallEvents,
     fetchPresence,
     presenceMap,
     typingMap,

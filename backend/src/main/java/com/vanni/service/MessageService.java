@@ -2,6 +2,7 @@ package com.vanni.service;
 
 import com.vanni.dto.request.SendMessageRequest;
 import com.vanni.dto.response.AttachmentDto;
+import com.vanni.dto.response.CallLogDto;
 import com.vanni.dto.response.LinkPreviewDto;
 import com.vanni.dto.response.MentionDto;
 import com.vanni.dto.response.MessageDto;
@@ -686,6 +687,8 @@ public class MessageService {
                 : null;
         }
 
+        CallLogDto callLogDto = message.getCallLog() != null ? toCallLogDto(message.getCallLog()) : null;
+
         return new MessageDto(
             message.getId(),
             message.getConversation().getId(),
@@ -705,8 +708,56 @@ public class MessageService {
             mentionsMe,
             notify,
             previewText,
-            message.getDeletedAt() == null && previews != null ? previews : List.of()
+            message.getDeletedAt() == null && previews != null ? previews : List.of(),
+            callLogDto
         );
+    }
+
+    public static CallLogDto toCallLogDto(CallLog callLog) {
+        if (callLog == null) return null;
+        return new CallLogDto(
+            callLog.getId(),
+            callLog.getCallUuid(),
+            callLog.getCallType().name(),
+            callLog.getEndReason().name(),
+            callLog.getCaller().getId(),
+            callLog.getCallee().getId(),
+            callLog.getDurationSec() != null ? callLog.getDurationSec() : 0,
+            callLog.getStartedAt(),
+            callLog.getEndedAt()
+        );
+    }
+
+    public MessageDto createCallLogMessage(Conversation conv, User caller, CallLog callLog, String label, Long... recipientIds) {
+        Message msg = Message.builder()
+            .conversation(conv)
+            .sender(caller)
+            .clientMessageId(callLog.getCallUuid())
+            .content(label)
+            .messageType(MessageType.CALL)
+            .callLog(callLog)
+            .build();
+        final Message savedMsg = messageRepository.save(msg);
+
+        conv.setLastMessage(savedMsg);
+        conv.setLastMessageAt(savedMsg.getCreatedAt());
+        conv.setUpdatedAt(savedMsg.getCreatedAt());
+        conversationRepository.save(conv);
+
+        for (Long uid : recipientIds) {
+            if (uid == null) continue;
+            boolean isCaller = uid.equals(caller.getId());
+            if (isCaller) {
+                conversationMemberRepository.findByConversationIdAndUserId(conv.getId(), uid).ifPresent(cm -> {
+                    cm.setLastReadMessageId(savedMsg.getId());
+                    cm.setLastReadAt(savedMsg.getCreatedAt());
+                    conversationMemberRepository.save(cm);
+                });
+            }
+            MessageDto dto = toDtoWithStatus(savedMsg, "SENT", List.of(), List.of(), List.of(), false, !isCaller, List.of());
+            eventPublisher.sendToUser(uid, "message.created", dto);
+        }
+        return toDtoWithStatus(savedMsg, "SENT", List.of(), List.of(), List.of(), false, false, List.of());
     }
 
     private void runAfterCommit(Runnable action) {
