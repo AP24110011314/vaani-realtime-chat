@@ -351,6 +351,18 @@ test.describe('Vanni Phase 9 E2E (Two Browsers, Realtime, Groups, Security, Mobi
     await expect(pageB.getByRole('log').getByText('Auto-delivered scheduled msg')).toBeVisible({ timeout: 15000 })
     await expect(pageA.getByRole('log').getByText('Auto-delivered scheduled msg')).toHaveCount(1)
 
+    // 6g. Phase 16 Catch Me Up (AI): Consent flow, unread backlog summary with jump links
+    // Ravi opens Asha's consent-gated summary panel via header Sparkles button after >5 messages exist
+    await pageB.getByRole('button', { name: 'Catch me up' }).click()
+    const catchUpPanel = pageB.getByRole('complementary', { name: 'Catch me up summary' })
+    await expect(catchUpPanel).toBeVisible()
+    await expect(catchUpPanel.getByText(/Vanni does not keep the summary/i)).toBeVisible()
+    await catchUpPanel.getByRole('button', { name: /Enable & Catch me up/i }).click()
+    await expect(catchUpPanel.getByText(/You missed \d+ messages/i)).toBeVisible({ timeout: 10000 })
+    await expect(catchUpPanel.getByText(/AI-generated, may contain mistakes/i)).toBeVisible()
+    await catchUpPanel.getByRole('button', { name: 'Dismiss' }).click()
+    await expect(catchUpPanel).toBeHidden()
+
     // 7. Mobile 390px viewport check on Context B
     await pageB.setViewportSize({ width: 390, height: 844 })
     await expect(pageB.getByRole('button', { name: 'Back to conversations' })).toBeVisible()

@@ -13,11 +13,13 @@ import {
   ShieldAlert,
   LogOut,
   UserCheck,
+  Sparkles,
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../context/ThemeContext'
 import { userApi } from '../api/userApi'
 import { authApi } from '../api/authApi'
+import { AI_CONSENT_NOTICE } from '../components/chat/CatchUpPanel'
 import {
   requestNotificationPermission,
   getNotificationPermission,
@@ -36,9 +38,13 @@ export default function SettingsPage() {
   const [showLastSeen, setShowLastSeen] = useState(user?.showLastSeen ?? true)
   const [showReadReceipts, setShowReadReceipts] = useState(user?.showReadReceipts ?? true)
   const [linkPreviewsEnabled, setLinkPreviewsEnabled] = useState(user?.linkPreviewsEnabled ?? true)
+  const [aiEnabled, setAiEnabled] = useState(user?.aiEnabled ?? false)
   const [isSavingPrivacy, setIsSavingPrivacy] = useState(false)
   const [privacySuccess, setPrivacySuccess] = useState('')
   const [privacyError, setPrivacyError] = useState('')
+  const [isSavingAi, setIsSavingAi] = useState(false)
+  const [aiMessage, setAiMessage] = useState('')
+  const [aiError, setAiError] = useState('')
 
   const [blockedUsers, setBlockedUsers] = useState([])
   const [isLoadingBlocked, setIsLoadingBlocked] = useState(true)
@@ -53,6 +59,7 @@ export default function SettingsPage() {
     setShowLastSeen(user.showLastSeen ?? true)
     setShowReadReceipts(user.showReadReceipts ?? true)
     setLinkPreviewsEnabled(user.linkPreviewsEnabled ?? true)
+    setAiEnabled(user.aiEnabled ?? false)
   }
 
   useEffect(() => {
@@ -145,6 +152,26 @@ export default function SettingsPage() {
       setPrivacyError('Failed to update privacy setting.')
     } finally {
       setIsSavingPrivacy(false)
+    }
+  }
+
+  const handleToggleAi = async () => {
+    const nextVal = !aiEnabled
+    setAiEnabled(nextVal)
+    setIsSavingAi(true)
+    setAiMessage('')
+    setAiError('')
+
+    try {
+      const updated = await userApi.setAiConsent(nextVal)
+      updateUser(updated)
+      setAiMessage(nextVal ? 'Catch me up summaries enabled.' : 'AI summaries turned off.')
+      setTimeout(() => setAiMessage(''), 3000)
+    } catch {
+      setAiEnabled(!nextVal)
+      setAiError('Failed to update AI consent setting.')
+    } finally {
+      setIsSavingAi(false)
     }
   }
 
@@ -454,6 +481,56 @@ export default function SettingsPage() {
                   />
                 </button>
               </div>
+            </div>
+          </section>
+
+          {/* 3b. AI Features (Catch Me Up) */}
+          <section className="glass rounded-3xl p-5 sm:p-6">
+            <h2 className="text-sm font-bold text-ink mb-1 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-accent-text" />
+              <span>AI Features</span>
+            </h2>
+            <p className="text-xs text-ink-muted mb-4 leading-relaxed">
+              {AI_CONSENT_NOTICE}
+            </p>
+
+            {aiMessage && (
+              <div className="mb-3 p-2.5 rounded-xl bg-[var(--success-bg)] text-[var(--success-text)] text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                <span>{aiMessage}</span>
+              </div>
+            )}
+            {aiError && (
+              <div role="alert" className="mb-3 p-2.5 rounded-xl bg-[var(--danger-bg)] text-[var(--danger-text)] text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{aiError}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-2 border-t border-[var(--glass-border)]">
+              <div className="pr-4">
+                <h3 className="text-xs font-semibold text-ink">Enable &ldquo;Catch me up&rdquo; summaries</h3>
+                <p className="text-[11px] text-ink-muted leading-snug mt-0.5">
+                  Off by default. Summarize missed messages into key points, decisions, and action items.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleToggleAi}
+                disabled={isSavingAi}
+                className={`w-12 h-6 rounded-full transition-all relative flex-shrink-0 focus-accent cursor-pointer ${
+                  aiEnabled ? 'accent-badge shadow-xs' : 'glass-subtle'
+                }`}
+                aria-label="Toggle AI features"
+              >
+                <span
+                  className={`block w-4 h-4 rounded-full transition-transform absolute top-1 left-1 shadow-xs ${
+                    aiEnabled
+                      ? 'translate-x-6 bg-white dark:bg-[#031416]'
+                      : 'translate-x-0 bg-[var(--text-secondary)]'
+                  }`}
+                />
+              </button>
             </div>
           </section>
 

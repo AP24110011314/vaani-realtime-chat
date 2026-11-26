@@ -37,6 +37,8 @@ import UserAvatar from './components/common/UserAvatar'
 import ProfilePage from './pages/ProfilePage'
 import SettingsPage from './pages/SettingsPage'
 import ScheduledPage from './pages/ScheduledPage'
+import CatchUpPanel from './components/chat/CatchUpPanel'
+import { aiApi } from './api/aiApi'
 import { ThemeProvider } from './context/ThemeContext'
 import { userApi } from './api/userApi'
 import { authApi } from './api/authApi'
@@ -1915,6 +1917,104 @@ describe('Phase 5 Groups, Presence & System Messages', () => {
       listSpy.mockRestore()
       sendNowSpy.mockRestore()
       cancelSpy.mockRestore()
+    })
+  })
+
+  describe('Phase 16 Catch Me Up (AI)', () => {
+    it('shows opt-in consent notice before enabling and triggers catchUp on accept', () => {
+      const onEnable = vi.fn()
+      render(
+        <CatchUpPanel
+          isOpen={true}
+          onClose={vi.fn()}
+          needsConsent={true}
+          onEnableConsent={onEnable}
+          isSavingConsent={false}
+        />
+      )
+
+      expect(screen.getByText(/Vanni does not keep the summary/i)).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: /Enable & Catch me up/i }))
+      expect(onEnable).toHaveBeenCalledTimes(1)
+    })
+
+    it('renders structured plain-text summary sections with working jump links and no HTML injection', () => {
+      const onJump = vi.fn()
+      const onRegen = vi.fn()
+      const data = {
+        messageCount: 18,
+        fromMessageId: 100,
+        toMessageId: 117,
+        truncated: false,
+        summary: {
+          overview: 'Team discussed launch readiness. <img src=x onerror=alert(1)>',
+          keyPoints: [{ text: 'QA benchmarks passed.', messageIds: [101] }],
+          decisions: [{ text: 'Ship on Friday morning.', messageIds: [105] }],
+          actionItems: [{ who: 'Ravi', what: 'Deploy migration', messageIds: [110] }],
+          forYou: [{ text: 'Meera asked you to verify staging.', messageIds: [115] }],
+        },
+      }
+
+      const { container } = render(
+        <CatchUpPanel
+          isOpen={true}
+          onClose={vi.fn()}
+          needsConsent={false}
+          isLoading={false}
+          data={data}
+          onRegenerate={onRegen}
+          onJumpToMessage={onJump}
+        />
+      )
+
+      expect(screen.getByText(/AI-generated, may contain mistakes/i)).toBeInTheDocument()
+      expect(container.querySelector('img')).toBeNull()
+      expect(screen.getByText(/Deploy migration/)).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Jump to message 105' }))
+      expect(onJump).toHaveBeenCalledWith(105)
+      fireEvent.click(screen.getByRole('button', { name: /Regenerate/i }))
+      expect(onRegen).toHaveBeenCalledTimes(1)
+    })
+
+    it('toggles AI consent on SettingsPage', async () => {
+      const blockedSpy = vi.spyOn(userApi, 'getBlocked').mockResolvedValueOnce([])
+      const consentSpy = vi.spyOn(userApi, 'setAiConsent').mockResolvedValueOnce({
+        id: 1,
+        name: 'Asha',
+        email: 'asha@vanni.app',
+        showLastSeen: true,
+        showReadReceipts: true,
+        linkPreviewsEnabled: true,
+        aiEnabled: true,
+        aiConsentAt: '2026-11-26T00:00:00Z',
+      })
+      const mockUpdateUser = vi.fn()
+
+      render(
+        <ThemeProvider>
+          <AuthContext.Provider
+            value={{
+              user: { id: 1, name: 'Asha', email: 'asha@vanni.app', aiEnabled: false },
+              updateUser: mockUpdateUser,
+              logout: vi.fn(),
+            }}
+          >
+            <MemoryRouter>
+              <SettingsPage />
+            </MemoryRouter>
+          </AuthContext.Provider>
+        </ThemeProvider>
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Toggle AI features' }))
+      await waitFor(() => {
+        expect(consentSpy).toHaveBeenCalledWith(true)
+        expect(mockUpdateUser).toHaveBeenCalled()
+      })
+      expect(aiApi.catchUp).toBeDefined()
+
+      blockedSpy.mockRestore()
+      consentSpy.mockRestore()
     })
   })
 })

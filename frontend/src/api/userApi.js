@@ -19,6 +19,10 @@ export const userApi = {
     const res = await http.patch('/users/me', data)
     return res.data
   },
+  setAiConsent: async (enabled) => {
+    const res = await http.put('/users/me/ai-consent', { enabled })
+    return res.data
+  },
   uploadAvatar: async (file) => {
     const formData = new FormData()
     formData.append('file', file)

@@ -72,6 +72,15 @@ public class UserService {
         return AuthService.toUserMe(user);
     }
 
+    public UserMeResponse setAiConsent(Long userId, boolean enabled) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "User not found"));
+        user.setAiEnabled(enabled);
+        user.setAiConsentAt(enabled ? Instant.now() : null);
+        user = userRepository.save(user);
+        return AuthService.toUserMe(user);
+    }
+
     @Transactional(readOnly = true)
     public UserSummaryResponse getUser(Long userId) {
         return getUser(userId, null);

@@ -36,6 +36,15 @@ app:
     min-lead-seconds: ${SCHEDULE_MIN_LEAD_SECONDS:60}
     max-days: ${SCHEDULE_MAX_DAYS:365}
     max-pending-per-user: ${SCHEDULE_MAX_PENDING_PER_USER:50}
+  ai:
+    features-enabled: ${AI_FEATURES_ENABLED:false}
+    provider: ${AI_PROVIDER:anthropic}
+    api-key: ${ANTHROPIC_API_KEY:}
+    model: ${AI_MODEL:claude-haiku-4-5}
+    max-input-chars: ${AI_MAX_INPUT_CHARS:60000}
+    timeout-seconds: ${AI_TIMEOUT_SECONDS:30}
+    rate-per-hour: ${AI_RATE_PER_HOUR:10}
+    rate-per-day: ${AI_RATE_PER_DAY:30}
 
 storage:
   provider: ${STORAGE_PROVIDER:local}

@@ -19,7 +19,7 @@ export default defineConfig({
   webServer: [
     {
       command:
-        '/opt/homebrew/opt/openjdk@21/bin/java -jar ../backend/target/vanni-backend-0.0.1-SNAPSHOT.jar --app.schedule.min-lead-seconds=5 --app.schedule.poll-ms=2000',
+        '/opt/homebrew/opt/openjdk@21/bin/java -jar ../backend/target/vanni-backend-0.0.1-SNAPSHOT.jar --app.schedule.min-lead-seconds=5 --app.schedule.poll-ms=2000 --app.ai.features-enabled=true --app.ai.provider=fake',
       url: 'http://localhost:8080/actuator/health',
       reuseExistingServer: false,
       timeout: 60000,

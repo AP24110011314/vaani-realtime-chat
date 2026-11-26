@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef, useContext } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -6,16 +6,20 @@ import { conversationApi } from '../../api/conversationApi'
 import { inviteApi } from '../../api/inviteApi'
 import { messageApi } from '../../api/messageApi'
 import { scheduledApi } from '../../api/scheduledApi'
+import { aiApi } from '../../api/aiApi'
+import { userApi } from '../../api/userApi'
 import { formatScheduledTime } from '../../lib/scheduleUtils'
+import { AuthContext } from '../../context/AuthContext'
 import { useSocket } from '../../hooks/useSocket'
 import { useTyping } from '../../hooks/useTyping'
 import ChatHeader from './ChatHeader'
 import MessageList from './MessageList'
 import MessageComposer from './MessageComposer'
 import GroupInfoPanel from './GroupInfoPanel'
+import CatchUpPanel, { CATCH_UP_UNREAD_THRESHOLD } from './CatchUpPanel'
 import MessageReceiptModal from './MessageReceiptModal'
 import UserAvatar from '../common/UserAvatar'
-import { Clock, ShieldAlert, SquarePen, Users, X } from 'lucide-react'
+import { Clock, ShieldAlert, Sparkles, SquarePen, Users, X } from 'lucide-react'
 
 export default function ChatWindow({
   conversationId,
@@ -25,12 +29,26 @@ export default function ChatWindow({
   onOpenNewGroup,
 }) {
   const queryClient = useQueryClient()
+  const authCtx = useContext(AuthContext)
+  const user = authCtx?.user || null
+  const updateUser = authCtx?.updateUser
   const { isConnected, sendMessage, setActiveConversationId, setIsChatAtBottom, removedEvent, sendRead } = useSocket()
   const { typingText, handleKeyStroke, handleStopTyping } = useTyping(conversationId)
   const [olderMessages, setOlderMessages] = useState([])
   const [hasOlder, setHasOlder] = useState(true)
   const [isLoadingOlder, setIsLoadingOlder] = useState(false)
   const [showGroupInfo, setShowGroupInfo] = useState(false)
+  const [showCatchUp, setShowCatchUp] = useState(false)
+  const [catchUpBannerDismissed, setCatchUpBannerDismissed] = useState(false)
+  const [catchUpLoading, setCatchUpLoading] = useState(false)
+  const [catchUpError, setCatchUpError] = useState(null)
+  const [catchUpData, setCatchUpData] = useState(null)
+  const [isSavingAiConsent, setIsSavingAiConsent] = useState(false)
+  const [initialUnreadSnapshot, setInitialUnreadSnapshot] = useState(() => {
+    const list = queryClient.getQueryData(['conversations']) || []
+    const match = Array.isArray(list) ? list.find((c) => String(c.id) === String(conversationId)) : null
+    return match?.unreadCount || 0
+  })
   const [receiptModalMessage, setReceiptModalMessage] = useState(null)
   const [replyTo, setReplyTo] = useState(null)
   const [editingMessage, setEditingMessage] = useState(null)
@@ -45,6 +63,13 @@ export default function ChatWindow({
     setOlderMessages([])
     setHasOlder(true)
     setShowGroupInfo(false)
+    setShowCatchUp(false)
+    setCatchUpBannerDismissed(false)
+    setCatchUpData(null)
+    setCatchUpError(null)
+    const list = queryClient.getQueryData(['conversations']) || []
+    const match = Array.isArray(list) ? list.find((c) => String(c.id) === String(conversationId)) : null
+    setInitialUnreadSnapshot(match?.unreadCount || 0)
     setReplyTo(null)
     setEditingMessage(null)
     setHighlightedMessageId(null)
@@ -95,6 +120,53 @@ export default function ChatWindow({
     queryFn: () => messageApi.list(conversationId, { size: 30 }),
     enabled: Boolean(conversationId),
   })
+
+  const computeCatchUpFromId = useCallback(() => {
+    const validMsgs = (latestMessages || []).filter((m) => m.id && !m.deleted)
+    if (validMsgs.length === 0) return undefined
+    if (initialUnreadSnapshot >= 5) {
+      const idx = Math.max(0, validMsgs.length - initialUnreadSnapshot - 1)
+      return idx === 0 && validMsgs.length <= initialUnreadSnapshot
+        ? Math.max(0, validMsgs[0].id - 1)
+        : validMsgs[idx].id
+    }
+    return Math.max(0, validMsgs[0].id - 1)
+  }, [latestMessages, initialUnreadSnapshot])
+
+  const handleOpenCatchUp = useCallback(
+    async ({ force = false, bypassConsentCheck = false } = {}) => {
+      setShowCatchUp(true)
+      setShowGroupInfo(false)
+      if (!bypassConsentCheck && !user?.aiEnabled) {
+        return
+      }
+      setCatchUpLoading(true)
+      setCatchUpError(null)
+      try {
+        const fromMessageId = computeCatchUpFromId()
+        const res = await aiApi.catchUp(conversationId, { fromMessageId, force })
+        setCatchUpData(res)
+      } catch (err) {
+        setCatchUpError(err.response?.data?.message || 'Could not generate AI summary right now.')
+      } finally {
+        setCatchUpLoading(false)
+      }
+    },
+    [conversationId, user?.aiEnabled, computeCatchUpFromId]
+  )
+
+  const handleEnableAiConsent = useCallback(async () => {
+    setIsSavingAiConsent(true)
+    try {
+      const updated = await userApi.setAiConsent(true)
+      updateUser?.(updated)
+      await handleOpenCatchUp({ force: false, bypassConsentCheck: true })
+    } catch (err) {
+      setCatchUpError(err.response?.data?.message || 'Failed to save AI preference.')
+    } finally {
+      setIsSavingAiConsent(false)
+    }
+  }, [updateUser, handleOpenCatchUp])
 
   // Fetch pending scheduled messages for this conversation
   const { data: pendingScheduled = [] } = useQuery({
@@ -463,7 +535,33 @@ export default function ChatWindow({
           typingText={typingText}
           onSelectSearchMatch={(msgId) => setHighlightedMessageId(msgId)}
           pendingJoinCount={pendingRequests.length}
+          onCatchUp={() => handleOpenCatchUp({ force: false })}
         />
+        {(Math.max(initialUnreadSnapshot, conversation?.unreadCount || 0)) >= CATCH_UP_UNREAD_THRESHOLD && !catchUpBannerDismissed && !showCatchUp && (
+          <div className="mx-3 mt-2 px-3.5 py-2 rounded-2xl glass-subtle border border-[var(--accent-soft-border)] flex items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <Sparkles className="w-3.5 h-3.5 text-accent-text flex-shrink-0" />
+              <span className="text-ink font-medium truncate">
+                {Math.max(initialUnreadSnapshot, conversation?.unreadCount || 0)} new messages
+              </span>
+              <button
+                type="button"
+                onClick={() => handleOpenCatchUp({ force: false })}
+                className="font-bold text-accent-text hover:underline cursor-pointer focus-accent rounded-md px-1 flex-shrink-0"
+              >
+                Catch me up
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCatchUpBannerDismissed(true)}
+              className="p-1 text-ink-subtle hover:text-ink rounded-full cursor-pointer focus-accent"
+              aria-label="Dismiss catch up banner"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
         <MessageList
           key={`list-${conversationId}`}
           messages={mergedMessages}
@@ -549,6 +647,20 @@ export default function ChatWindow({
           }}
         />
       )}
+
+      <CatchUpPanel
+        isOpen={showCatchUp}
+        onClose={() => setShowCatchUp(false)}
+        needsConsent={!user?.aiEnabled}
+        onEnableConsent={handleEnableAiConsent}
+        isSavingConsent={isSavingAiConsent}
+        isLoading={catchUpLoading}
+        error={catchUpError}
+        data={catchUpData}
+        unreadCount={conversation?.unreadCount || 0}
+        onRegenerate={() => handleOpenCatchUp({ force: true })}
+        onJumpToMessage={(msgId) => setHighlightedMessageId(msgId)}
+      />
 
       {receiptModalMessage && (
         <MessageReceiptModal

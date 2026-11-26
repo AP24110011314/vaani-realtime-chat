@@ -1,5 +1,6 @@
 package com.vanni.controller;
 
+import com.vanni.dto.request.AiConsentRequest;
 import com.vanni.dto.request.UpdateUserRequest;
 import com.vanni.dto.response.UserMeResponse;
 import com.vanni.dto.response.UserSummaryResponse;
@@ -44,6 +45,14 @@ public class UserController {
             @Valid @RequestBody UpdateUserRequest req
     ) {
         return ResponseEntity.ok(userService.updateMe(principal.id(), req));
+    }
+
+    @PutMapping("/me/ai-consent")
+    public ResponseEntity<UserMeResponse> setAiConsent(
+            @CurrentUser UserPrincipal principal,
+            @Valid @RequestBody AiConsentRequest req
+    ) {
+        return ResponseEntity.ok(userService.setAiConsent(principal.id(), Boolean.TRUE.equals(req.enabled())));
     }
 
     @PostMapping("/me/avatar")

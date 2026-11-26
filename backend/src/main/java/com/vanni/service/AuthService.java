@@ -209,7 +209,9 @@ public class AuthService {
             user.getAbout(),
             user.isShowLastSeen(),
             user.isShowReadReceipts(),
-            user.isLinkPreviewsEnabled()
+            user.isLinkPreviewsEnabled(),
+            user.isAiEnabled(),
+            user.getAiConsentAt()
         );
     }
 

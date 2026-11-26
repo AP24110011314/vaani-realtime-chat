@@ -45,6 +45,13 @@ public class User {
     @Builder.Default
     private boolean linkPreviewsEnabled = true;
 
+    @Column(name = "ai_enabled", nullable = false)
+    @Builder.Default
+    private boolean aiEnabled = false;
+
+    @Column(name = "ai_consent_at")
+    private Instant aiConsentAt;
+
     @Column(nullable = false)
     @Builder.Default
     private boolean enabled = true;

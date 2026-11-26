@@ -10,6 +10,7 @@ import {
   Loader2,
   Ban,
   UserCheck,
+  Sparkles,
 } from 'lucide-react'
 import { usePresence } from '../../hooks/usePresence'
 import { formatLastSeen } from '../../lib/formatters'
@@ -26,6 +27,7 @@ export default function ChatHeader({
   typingText,
   onSelectSearchMatch,
   pendingJoinCount = 0,
+  onCatchUp,
 }) {
   const isGroup = conversation?.type === 'GROUP'
   const { title, avatarUrl, members, description } = conversation || {}
@@ -246,6 +248,17 @@ export default function ChatHeader({
 
           {/* Glass Action Button Group */}
           <div className="glass-subtle rounded-2xl p-1 flex items-center gap-0.5">
+            {onCatchUp && (
+              <button
+                type="button"
+                onClick={onCatchUp}
+                className="p-1.5 text-ink-muted hover:text-accent-text hover:bg-[var(--glass-bg-hover)] rounded-xl transition-all active:scale-95 focus-accent cursor-pointer"
+                title="Catch me up"
+                aria-label="Catch me up"
+              >
+                <Sparkles className="w-4 h-4" />
+              </button>
+            )}
             <button
               onClick={handleOpenSearch}
               className="p-1.5 text-ink-muted hover:text-ink hover:bg-[var(--glass-bg-hover)] rounded-xl transition-all active:scale-95 focus-accent cursor-pointer"

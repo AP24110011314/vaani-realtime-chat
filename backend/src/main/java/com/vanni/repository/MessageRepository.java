@@ -134,4 +134,21 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
         @Param("matchAll") boolean matchAll,
         Pageable pageable
     );
+
+    @Query("""
+        SELECT m FROM Message m
+        JOIN FETCH m.sender s
+        WHERE m.conversation.id = :convId
+          AND m.deletedAt IS NULL
+          AND m.messageType != com.vanni.entity.MessageType.SYSTEM
+          AND m.createdAt >= :joinedAt
+          AND (:fromId IS NULL OR m.id > :fromId)
+        ORDER BY m.id DESC
+    """)
+    List<Message> findCatchUpMessagesDesc(
+        @Param("convId") Long convId,
+        @Param("joinedAt") java.time.Instant joinedAt,
+        @Param("fromId") Long fromId,
+        Pageable pageable
+    );
 }
