@@ -121,7 +121,7 @@ public class CatchUpUnitTest {
     void geminiClientSendsHeaderKeyAndParsesCandidates() throws Exception {
         AtomicReference<String> seenKeyHeader = new AtomicReference<>();
         HttpServer mockGemini = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        mockGemini.createContext("/v1beta/models/gemini-2.5-flash:generateContent", ex -> {
+        mockGemini.createContext("/v1beta/models/gemini-flash-latest:generateContent", ex -> {
             seenKeyHeader.set(ex.getRequestHeaders().getFirst("x-goog-api-key"));
             String payload = """
                 {
@@ -143,7 +143,7 @@ public class CatchUpUnitTest {
             props.setFeaturesEnabled(true);
             props.setProvider("gemini");
             props.setGeminiApiKey("fake-gemini-key");
-            props.setGeminiModel("gemini-2.5-flash");
+            props.setGeminiModel("gemini-flash-latest");
             props.setGeminiBaseUrl("http://127.0.0.1:" + mockGemini.getAddress().getPort());
 
             GeminiAiSummaryService client = new GeminiAiSummaryService(props);

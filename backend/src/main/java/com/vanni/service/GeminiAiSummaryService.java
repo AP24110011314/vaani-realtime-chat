@@ -73,7 +73,7 @@ public class GeminiAiSummaryService implements AiSummaryService {
 
         String modelName = (props.getGeminiModel() != null && !props.getGeminiModel().isBlank())
             ? props.getGeminiModel().trim()
-            : "gemini-2.5-flash";
+            : "gemini-flash-latest";
         String baseUrl = (props.getGeminiBaseUrl() != null && !props.getGeminiBaseUrl().isBlank())
             ? props.getGeminiBaseUrl().replaceAll("/+$", "")
             : "https://generativelanguage.googleapis.com";
@@ -85,7 +85,7 @@ public class GeminiAiSummaryService implements AiSummaryService {
             "generationConfig", Map.of(
                 "responseMimeType", "application/json",
                 "temperature", 0.2,
-                "maxOutputTokens", 1536
+                "maxOutputTokens", 4096
             )
         );
 
