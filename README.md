@@ -2,7 +2,7 @@
 
 # Vanni
 
-**A real-time web chat platform crafted with frosted-glass aesthetics, hardened security, and sub-second STOMP messaging.**
+**A real-time web chat platform crafted with frosted-glass aesthetics, hardened security, AI conversation recaps, and sub-second STOMP messaging & WebRTC calls.**
 
 [![Java](https://img.shields.io/badge/Java-21_LTS-0F766E?style=flat-square&logo=openjdk&logoColor=white)](backend/pom.xml)
 [![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1.3-0E7490?style=flat-square&logo=springboot&logoColor=white)](backend/pom.xml)
@@ -12,7 +12,7 @@
 
 <br />
 
-<img src="docs/screenshots/chat_desktop.png" alt="Vanni Desktop Chat — Pearl Light Theme" width="100%" />
+<img src="assets/screenshots/hero_desktop_light.png" alt="Vanni Desktop Chat — Pearl Light Theme" width="100%" />
 
 </div>
 
@@ -20,9 +20,9 @@
 
 ## Overview
 
-**Vanni** runs directly in any modern desktop or mobile browser with zero installation. Users can register, search contacts, chat one-to-one or in groups, share images and documents, react, reply, edit, or delete messages, and see live presence, typing indicators, and delivery/read receipts in real time.
+**Vanni** runs directly in any modern desktop or mobile browser with zero installation. Users can register, search contacts, chat one-to-one or in groups with `@mentions`, share voice notes, files, and rich link previews, schedule future messages, join groups via invite links or QR codes, catch up on missed conversations with server-side AI summaries, and hop onto 1:1 WebRTC voice or video calls.
 
-Built around the **Vanni Glass** design system, the interface pairs **Pearl** (warm cream mesh light mode) and **Onyx** (true-black dark mode) with translucent frosted panels, crisp teal-sky accents, and a bespoke **Fraunces** wordmark.
+Built around the **Vanni Glass** design system, the interface pairs **Pearl** (warm cream mesh light mode) and **Onyx** (true-black dark mode) with translucent frosted panels, crisp teal-sky accents, and a **Fraunces** wordmark.
 
 ---
 
@@ -34,30 +34,38 @@ Built around the **Vanni Glass** design system, the interface pairs **Pearl** (w
     <th width="50%">Sign In (Pearl Light)</th>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/landing.png" alt="Landing Page in Pearl Light Theme" /></td>
-    <td><img src="docs/screenshots/login.png" alt="Login Page in Pearl Light Theme" /></td>
+    <td><img src="assets/screenshots/landing_light.png" alt="Landing Page in Pearl Light Theme" /></td>
+    <td><img src="assets/screenshots/login_light.png" alt="Sign In Page in Pearl Light Theme" /></td>
   </tr>
   <tr>
-    <th>Group Workspace & Info Panel (Pearl Light)</th>
-    <th>Profile (Pearl Light)</th>
+    <th>Group @Mentions, Invite Links & QR (Pearl Light)</th>
+    <th>AI "Catch me up" Recap — Onyx Dark</th>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/group.png" alt="Group Chat and Info Panel in Pearl Light Theme" /></td>
-    <td><img src="docs/screenshots/profile.png" alt="Profile Page in Pearl Light Theme" /></td>
+    <td><img src="assets/screenshots/group_invites_light.png" alt="Group Chat with @Mentions and Invite Links QR Code in Pearl Light" /></td>
+    <td><img src="assets/screenshots/dark_mode_catchup.png" alt="Group Chat and AI Catch me up Panel in Onyx Dark Theme" /></td>
   </tr>
   <tr>
-    <th>Settings & Theme Switcher (Pearl Light)</th>
-    <th>Active Chat — Onyx Dark Mode</th>
+    <th>Voice Message Recording & Waveforms (Pearl Light)</th>
+    <th>Scheduled Messages Queue (Pearl Light)</th>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/settings.png" alt="Settings Page in Pearl Light Theme" /></td>
-    <td><img src="docs/screenshots/dark_mode.png" alt="Desktop Chat in Onyx Dark Theme" /></td>
+    <td><img src="assets/screenshots/voice_recorder_light.png" alt="Voice Message Recorder and Waveform Player in Pearl Light" /></td>
+    <td><img src="assets/screenshots/scheduled_messages_light.png" alt="Scheduled Messages Page in Pearl Light Theme" /></td>
+  </tr>
+  <tr>
+    <th>1:1 WebRTC Video Call</th>
+    <th>Settings, Privacy & Call Relay (Pearl Light)</th>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/video_call_desktop.png" alt="Active 1:1 WebRTC Video Call with Connection Quality Badge" /></td>
+    <td><img src="assets/screenshots/settings_light.png" alt="Settings, Theme Switcher, Privacy, and Call Relay Controls in Pearl Light" /></td>
   </tr>
 </table>
 
 <div align="center">
   <strong>Mobile View (390px — Pearl Light)</strong><br /><br />
-  <img src="docs/screenshots/chat_mobile.png" alt="Mobile Chat View in Pearl Light Theme" width="320" />
+  <img src="assets/screenshots/mobile_chat_light.png" alt="Mobile Chat View in Pearl Light Theme" width="320" />
 </div>
 
 ---
@@ -66,23 +74,26 @@ Built around the **Vanni Glass** design system, the interface pairs **Pearl** (w
 
 | Area | Highlights |
 |---|---|
-| **Authentication & Security** | HttpOnly JWT cookie (`vanni_at`), SHA-256 hashed rotating refresh tokens (`vanni_rt`) with reuse-family revocation, SPA CSRF (`X-XSRF-TOKEN`), strict WebSocket `Origin` validation, Bucket4j rate limiting with `Retry-After`, CSP/HSTS headers, and `X-Request-Id` MDC logging. |
-| **Real-Time Messaging** | STOMP over WebSocket (`/ws`), idempotent `clientMessageId` delivery, cursor pagination (`before`/`after`), server-throttled typing indicators, group admin roles, member management, and live system events. |
-| **Receipts & Notifications** | Monotonic `SENT` → `DELIVERED` → `READ` state machine, per-recipient receipt inspection, unread badge counters, privacy toggles (`showLastSeen`, `showReadReceipts`), pin/mute/archive controls, and browser notifications. |
-| **Attachments & Profiles** | Apache Tika MIME sniffing, spoofed/executable file rejection, image EXIF stripping, pluggable storage (`local`, `cloudinary`, `s3`), user & group avatars, and multi-image lightbox navigation. |
-| **Rich Chat UX & Themes** | Quoted replies, emoji reactions, 15-minute edit window, soft delete, in-chat & global message search, user blocking, Light (`Pearl`) / Dark (`Onyx`) / System themes, and multi-device logout. |
+| **Authentication & Security** | HttpOnly JWT cookie (`vanni_at`), SHA-256 hashed rotating refresh tokens (`vanni_rt`) with reuse-family revocation, SPA CSRF (`X-XSRF-TOKEN`), strict WebSocket `Origin` validation, Bucket4j rate limiting with `Retry-After`, CSP/HSTS/Permissions-Policy headers, and `X-Request-Id` MDC logging. |
+| **Real-Time Messaging & Groups** | STOMP over WebSocket (`/ws`), idempotent `clientMessageId` delivery, cursor pagination, live typing & presence, `@mentions` with `@all` admin rate-limits and `@` badge filtering, plus SHA-256 hashed invite links with expiration, usage caps, admin approval, and QR codes. |
+| **Voice, Previews & Scheduling** | Browser `MediaRecorder` voice notes with 64-bar waveform playback and HTTP `Range` streaming; SSRF-hardened OpenGraph link previews via `SafeHttpFetcher` and local image proxying; UTC-stored scheduled messages claimed once via `FOR UPDATE SKIP LOCKED`. |
+| **AI "Catch me up" & Calls** | Per-user opt-in unread conversation summaries powered server-side by Gemini (`gemini-flash-lite-latest`) or Anthropic with prompt-injection boundaries and zero stored transcripts; 1:1 WebRTC audio/video calls over STOMP signaling with ICE quality indicators and relay-only privacy mode. |
+| **Receipts, Media & Themes** | Monotonic `SENT` → `DELIVERED` → `READ` receipts, Apache Tika MIME sniffing, EXIF stripping, pluggable attachment storage (`local`, `cloudinary`, `s3`), Pearl (`Light`) / Onyx (`Dark`) / System themes, and 390px mobile responsiveness. |
 
 ---
 
 ## Architecture
 
 ```text
-  Browser (React 19 + STOMP.js)
+  Browser (React 19 + STOMP.js + WebRTC)
        │  HTTPS / WSS (HttpOnly cookies + X-XSRF-TOKEN)
        ▼
   Nginx Reverse Proxy / Vite Dev Proxy
-       ├── /api/**  ──▶ Spring Boot REST Controllers ──▶ Services / Bucket4j ──▶ MySQL 8.4 (Flyway V1..V6)
-       ├── /ws      ──▶ STOMP Handshake + Auth Interceptor ──▶ EventPublisher ──▶ Storage (Local / S3 / Cloudinary)
+       ├── /api/**  ──▶ Spring Boot REST Controllers ──▶ Services / Bucket4j ──▶ MySQL 8.4 (Flyway V1..V14)
+       │                                              ├── SafeHttpFetcher (SSRF-guarded previews)
+       │                                              ├── AI Provider (Gemini / Anthropic, server-side)
+       │                                              └── Storage (Local / S3 / Cloudinary)
+       ├── /ws      ──▶ STOMP Handshake + Auth Interceptor ──▶ EventPublisher + Call Signaling
        └── /*       ──▶ React SPA (dist/)
 ```
 
@@ -92,10 +103,10 @@ Built around the **Vanni Glass** design system, the interface pairs **Pearl** (w
 
 | Layer | Technologies |
 |---|---|
-| **Frontend** | React 19, Vite 8, Tailwind CSS 4, TanStack Query 5, React Hook Form, Zod, `@stomp/stompjs`, Lucide, Plus Jakarta Sans & Fraunces |
-| **Backend** | Java 21 LTS, Spring Boot 4.1.3, Spring Security, Spring Data JPA, Spring WebSocket (STOMP), Flyway, JJWT, Bucket4j, Apache Tika |
+| **Frontend** | React 19, Vite 8, Tailwind CSS 4, TanStack Query 5, React Hook Form, Zod, `@stomp/stompjs`, Lucide, `qrcode.react`, Plus Jakarta Sans & Fraunces |
+| **Backend** | Java 21 LTS, Spring Boot 4.1.3, Spring Security, Spring Data JPA, Spring WebSocket (STOMP), Flyway, JJWT, Bucket4j, Apache Tika, Jsoup, Apache HttpClient 5, Caffeine |
 | **Database** | MySQL 8.4 (`utf8mb4`) |
-| **Testing & QA** | JUnit 5, Mockito, MockMvc, JaCoCo, Vitest, React Testing Library, MSW, Playwright, Lighthouse |
+| **Testing & QA** | JUnit 5, Mockito, MockMvc, Testcontainers (MySQL), JaCoCo, Vitest, React Testing Library, MSW, Playwright |
 | **Deployment** | Multi-stage Docker builds, Nginx reverse proxy, GitHub Actions CI/CD |
 
 ---
@@ -111,17 +122,17 @@ Built around the **Vanni Glass** design system, the interface pairs **Pearl** (w
 ### Local Development
 
 ```bash
-# 1. Copy environment template
+# 1. Copy environment template (and optionally set GEMINI_API_KEY)
 cp .env.example .env
 
 # 2. Start MySQL 8.4 on host port 3307
 docker compose up -d mysql
 
-# 3. Start Spring Boot backend (port 8080, dev profile seeds demo accounts)
-cd backend && SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
+# 3. Start Spring Boot backend (port 8080, dev profile seeds demo accounts & enables AI summaries)
+cd backend && set -a && . ../.env && set +a && SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
 
 # 4. Start React frontend (port 5173, proxies /api and /ws -> :8080)
-cd frontend && npm install && npm run dev
+cd frontend && npm install && npm run dev -- --port 5173
 ```
 
 Open [http://localhost:5173](http://localhost:5173). *(Avoid ports `5000` and `7000` on macOS, which are reserved by AirPlay Receiver.)*
@@ -130,7 +141,7 @@ Open [http://localhost:5173](http://localhost:5173). *(Avoid ports `5000` and `7
 
 ```bash
 cp .env.example .env
-# Configure DB_ROOT_PASSWORD, DB_PASSWORD, JWT_SECRET (64+ chars), and ALLOWED_ORIGINS
+# Configure DB_ROOT_PASSWORD, DB_PASSWORD, JWT_SECRET (64+ chars), ALLOWED_ORIGINS, and optional AI / TURN secrets
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
@@ -149,39 +160,22 @@ See [`.env.example`](.env.example) for the complete reference:
 | `DB_USER` / `DB_PASSWORD` | `vanni` / `vannipass` | Database credentials |
 | `JWT_SECRET` | dev fallback | 64+ character HMAC secret (required in production) |
 | `COOKIE_SECURE` | `false` (`true` in `prod`) | `Secure` flag on `vanni_at` and `vanni_rt` cookies |
-| `ALLOWED_ORIGINS` | `http://localhost:5173,...` | Allowed WebSocket `Origin` patterns |
-| `STORAGE_PROVIDER` / `STORAGE_LOCAL_DIR` | `local` / `./uploads` | Attachment & avatar storage (`local` \| `cloudinary` \| `s3`) |
+| `ALLOWED_ORIGINS` | `http://localhost:5173` | Allowed WebSocket `Origin` patterns |
+| `STORAGE_PROVIDER` / `STORAGE_LOCAL_DIR` | `local` / `./uploads` | Attachment, voice & avatar storage (`local` \| `cloudinary` \| `s3`) |
 | `MAX_UPLOAD_MB` | `10` | Maximum attachment upload size |
+| `AI_FEATURES_ENABLED` / `AI_PROVIDER` | `true` (`dev`) / `auto` (`dev`) | Server-side Catch me up toggle & provider (`gemini` \| `anthropic` \| `fake` \| `auto`) |
+| `GEMINI_API_KEY` / `GEMINI_MODEL` | unset / `gemini-flash-lite-latest` | Gemini API key (server-side only) and model alias |
+| `CALLS_STUN_URLS` / `CALLS_TURN_URLS` | Google STUN / unset | WebRTC ICE servers and optional TURN credentials |
 | `APP_PORT` | `8088` | Host port mapped to Nginx in `docker-compose.prod.yml` |
-
----
-
-## API & WebSocket Summary
-
-- **REST (`/api`):** Auth (`/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/logout-all`, `/auth/change-password`, `/auth/csrf`), Users (`/users/me`, `/users/me/avatar`, `/users/{id}/block`, `/users/blocked`), Conversations (`/conversations`, `/direct`, `/groups`, `/members`, `/leave`, `/settings`, `/avatar`), Messages (`/conversations/{id}/messages`, `/messages/{id}`, `/reactions`, `/receipts`, `/search/messages`), Attachments (`/attachments`), Presence (`/presence`), Health (`/actuator/health`). Full contract: [`docs/API.md`](docs/API.md).
-- **WebSocket STOMP (`/ws`):** Single personal queue `/user/queue/events`; client destinations `/app/chat.send`, `/app/chat.delivered`, `/app/chat.read`, `/app/chat.typing`; server events `message.created`, `message.updated`, `message.deleted`, `receipt.updated`, `unread.updated`, `typing`, `presence.changed`, `conversation.*`, `error`. Full contract: [`docs/WEBSOCKET.md`](docs/WEBSOCKET.md).
 
 ---
 
 ## Testing & Quality
 
 ```bash
-# Backend unit, integration, security & WebSocket tests + JaCoCo
-cd backend && ./mvnw verify
+# Backend unit, integration (Testcontainers MySQL), security & WebSocket tests + JaCoCo
+cd backend && ./mvnw -q verify
 
 # Frontend lint, unit/MSW tests, production build & Playwright E2E
 cd frontend && npm run lint && npm test -- --run && npm run build && npx playwright test
 ```
-
----
-
-## Documentation
-
-- [`docs/API.md`](docs/API.md) — REST contract and DTO schemas
-- [`docs/WEBSOCKET.md`](docs/WEBSOCKET.md) — STOMP destinations and event envelopes
-- [`docs/SECURITY.md`](docs/SECURITY.md) — Auth, authorization, headers, rate limits & checklist
-- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — Production topology, Docker & CI/CD
-- [`docs/DECISIONS.md`](docs/DECISIONS.md) — Architectural decisions log
-- [`docs/TESTING.md`](docs/TESTING.md) — Test strategy and coverage expectations
-- [`docs/QA_REPORT.md`](docs/QA_REPORT.md) — Full QA verification report
-- [`docs/phases/`](docs/phases/) — Phase 1–10 plans and verification records
